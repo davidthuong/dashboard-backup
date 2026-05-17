@@ -1,0 +1,34 @@
+services:
+  app:
+    build: .
+    container_name: backup-dashboard-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: backup-dashboard-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/certbot:/var/www/certbot:ro
+      - ./deploy/letsencrypt:/etc/letsencrypt:ro
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: backup-dashboard-certbot
+    profiles:
+      - tools
+    volumes:
+      - ./deploy/nginx/certbot:/var/www/certbot
+      - ./deploy/letsencrypt:/etc/letsencrypt

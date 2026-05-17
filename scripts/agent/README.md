@@ -1,0 +1,161 @@
+# Remote Agent Scripts (Linux + Windows)
+
+These scripts help remote backup servers push status to the central dashboard (`/api/ingest/status`).
+
+## 1) Runtime requirement
+
+- Linux: `bash` + `curl` (+ `rclone` for backup jobs)
+- Windows: PowerShell + `Invoke-RestMethod` (+ `rclone` for backup jobs)
+- Python scripts are optional, not required.
+
+## 2) Script options
+
+- `push_by_exit_code.py`:
+  - Use when you run backup command in wrapper script and have exit code.
+- `report_rclone_log.py`:
+  - Use when backup job already exists and you only parse log after job completes.
+- `linux_rclone_backup_and_push.sh`:
+  - No Python. Run rclone and push by exit code.
+- `linux_push_from_log.sh`:
+  - No Python. Parse log and push `last_error_line` + `last_10_log_lines`.
+- `windows_rclone_backup_and_push.ps1`:
+  - No Python. Run rclone and push by exit code.
+- `windows_push_from_log.ps1`:
+  - No Python. Parse log and push `last_error_line` + `last_10_log_lines`.
+- `report_directadmin_log.py`:
+  - Parse DirectAdmin backup log and push result to hub.
+- `windows_icewarp_backup_and_push.ps1`:
+  - Run IceWarp backup by rclone and push final status to hub.
+  - Follows IceWarp flow (mail + archive + cleanup) and pushes:
+    - `success` if both mail/archive exit 0
+    - `warning` if one of mail/archive fails
+    - `failed` if script-level error
+  - Includes `error_reason`, `last_error_line`, `last_10_log_lines` in payload for troubleshooting.
+- `windows_secure_receiver.ps1`:
+  - Receive signed hub trigger requests (HMAC + timestamp + nonce + IP allowlist).
+- `windows_secure_receiver_runner.ps1`:
+  - Keep receiver running and auto-restart if it exits/crashes.
+- `windows_install_secure_receiver_task.ps1`:
+  - Install secure receiver as startup scheduled task (`SYSTEM`), with URLACL + firewall rule.
+- `windows_remove_secure_receiver_task.ps1`:
+  - Remove startup task (+ optional URLACL/firewall cleanup).
+
+## 3) Linux setup (cron)
+
+1. Copy project/scripts to remote node (or clone repo).
+2. Edit variables in:
+   - `linux_rclone_backup_and_push.sh` (run backup + push)
+   - or `linux_push_from_log.sh` (parse log + push)
+3. Make executable:
+
+```bash
+chmod +x scripts/agent/linux_rclone_backup_and_push.sh
+chmod +x scripts/agent/linux_push_from_log.sh
+```
+
+4. Add cron entry (`crontab -e`):
+
+```cron
+# Run backup and push status every day at 01:00
+0 1 * * * /opt/backup-dashboard/scripts/agent/linux_rclone_backup_and_push.sh >> /var/log/backup-agent.log 2>&1
+
+# Parse log and push every day at 01:15 (if job already scheduled elsewhere)
+15 1 * * * /opt/backup-dashboard/scripts/agent/linux_push_from_log.sh >> /var/log/backup-agent.log 2>&1
+```
+
+## 4) Windows setup (Task Scheduler)
+
+1. Keep scripts in e.g. `C:\backup-dashboard\scripts\agent\`.
+2. Edit values in:
+   - `windows_rclone_backup_and_push.ps1`
+   - or `windows_push_from_log.ps1`
+3. Create task (PowerShell as Administrator):
+
+```powershell
+# Daily 01:00, run backup + push
+schtasks /Create /TN "BackupHub-Rclone-Nightly" /SC DAILY /ST 01:00 `
+  /TR "powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_rclone_backup_and_push.ps1" `
+  /RU SYSTEM
+
+# Daily 01:15, parse log + push
+schtasks /Create /TN "BackupHub-Rclone-ParseLog" /SC DAILY /ST 01:15 `
+  /TR "powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_push_from_log.ps1" `
+  /RU SYSTEM
+
+# Daily 23:30, IceWarp backup + push
+schtasks /Create /TN "BackupHub-IceWarp-Nightly" /SC DAILY /ST 23:30 `
+  /TR "powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_icewarp_backup_and_push.ps1" `
+  /RU SYSTEM
+```
+
+## 5) Quick manual test
+
+```bash
+HUB_URL=http://10.10.10.10:8000 \
+INGEST_TOKEN=change_me \
+NODE_NAME=test-node \
+JOB_NAME=test-job \
+RCLONE_CMD="true" \
+bash /opt/backup-dashboard/scripts/agent/linux_rclone_backup_and_push.sh
+```
+
+DirectAdmin log test:
+
+```bash
+python scripts/agent/report_directadmin_log.py \
+  --hub http://10.10.10.10:8000 \
+  --token change_me \
+  --node da-node-01 \
+  --job directadmin-nightly \
+  --log /var/log/directadmin/backup.log \
+  --dry-run
+```
+
+## 6) Secure Hub-Triggered Mode (Windows)
+
+If you want hub to trigger agent proactively (instead of waiting for cron/task):
+
+1. Install receiver as auto-start task (recommended, run PowerShell as Administrator):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_install_secure_receiver_task.ps1 `
+  -TaskName "BackupHub-SecureReceiver" `
+  -ListenPrefix "http://+:9189/" `
+  -RoutePath "/collect" `
+  -SharedSecret "<shared-secret>" `
+  -AllowedHubIPs "103.238.213.14" `
+  -DefaultHubUrl "https://103.238.213.14" `
+  -DefaultIngestToken "<INGEST_API_TOKEN>"
+```
+
+2. (Optional) run receiver manually for quick debug:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_secure_receiver.ps1 `
+  -ListenPrefix "http://+:9189/" `
+  -RoutePath "/collect" `
+  -SharedSecret "<shared-secret>" `
+  -AllowedHubIPs "103.238.213.14"
+```
+
+3. Configure hub `.env`:
+- `AGENT_TRIGGER_ENABLED=true`
+- `AGENT_NODES_JSON=[{"name":"win-bk01","url":"http://win-bk01:9189/collect","shared_secret":"<shared-secret>","verify_ssl":false,"action":"rclone_log_push","payload":{"job_name":"nightly-share","log_path":"C:\\Logs\\rclone-nightly-share.log"}}]`
+
+4. Trigger from dashboard button `Trigger Agents` or API:
+- `POST /api/agents/trigger-all`
+- `POST /api/agents/trigger/{name}`
+
+5. Remove task when needed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_remove_secure_receiver_task.ps1 `
+  -TaskName "BackupHub-SecureReceiver" `
+  -ListenPrefix "http://+:9189/"
+```
+
+Security notes:
+- Use strong random `shared_secret` per node.
+- Keep `RequestTtlSeconds` low (default 120s).
+- Restrict node firewall to Hub IP only.
+- Prefer HTTPS / private network between hub and node.

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backup Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css?v={{ generated_at }}" />
+  </head>
+  <body class="venix-body">
+    <div class="venix-layout">
+      <aside class="venix-sidebar">
+        <div class="brand">
+          <div class="brand-mark">V</div>
+          <div>
+            <h1>Venix Ops</h1>
+            <p>Backup Control</p>
+          </div>
+        </div>
+        <nav class="menu">
+          <a class="menu-item active" href="#">Overview</a>
+          <a class="menu-item" href="#serverCard">Server Overview</a>
+          <a class="menu-item" href="#rcloneCard">Rclone Overview</a>
+          <a class="menu-item" href="#latestCard">Latest Status</a>
+          <a class="menu-item" href="#historyCard">History</a>
+        </nav>
+        <div class="sidebar-foot">
+          <p class="meta-label">System</p>
+          <p class="meta-value">Veeam + rclone + DirectAdmin</p>
+          <form method="post" action="/auth/logout">
+            <button type="submit" class="ghost">Logout</button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="venix-main">
+        <header class="venix-topbar">
+          <div>
+            <h2>Backup Dashboard</h2>
+            <p class="muted">Centralized monitoring for all backup nodes</p>
+          </div>
+          <div class="top-actions">
+            <span id="statusLine" class="status-pill">Ready</span>
+            <button id="triggerAgentsBtn" class="secondary">Trigger Agents</button>
+            <button id="refreshBtn" class="primary">Collect Now</button>
+          </div>
+        </header>
+
+        <section class="kpi-grid">
+          <article class="kpi-card total">
+            <p>Total Jobs</p>
+            <h3 id="sumTotal">0</h3>
+          </article>
+          <article class="kpi-card success">
+            <p>Success</p>
+            <h3 id="sumSuccess">0</h3>
+          </article>
+          <article class="kpi-card warning">
+            <p>Warning</p>
+            <h3 id="sumWarning">0</h3>
+          </article>
+          <article class="kpi-card failed">
+            <p>Failed</p>
+            <h3 id="sumFailed">0</h3>
+          </article>
+          <article class="kpi-card running">
+            <p>Running</p>
+            <h3 id="sumRunning">0</h3>
+          </article>
+          <article class="kpi-card unknown">
+            <p>Unknown</p>
+            <h3 id="sumUnknown">0</h3>
+          </article>
+        </section>
+
+        <section class="venix-card controls">
+          <div class="card-head">
+            <h3>Filter & Polling</h3>
+            <p class="muted">Quick filter and polling control</p>
+          </div>
+          <div class="filters">
+            <label>
+              Source
+              <select id="sourceFilter">
+                <option value="">All</option>
+                <option value="veeam">Veeam</option>
+                <option value="rclone">rclone</option>
+                <option value="directadmin">DirectAdmin</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select id="statusFilter">
+                <option value="">All</option>
+                <option value="success">Success</option>
+                <option value="warning">Warning</option>
+                <option value="failed">Failed</option>
+                <option value="running">Running</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            <label>
+              Search
+              <input id="searchFilter" placeholder="job name..." />
+            </label>
+            <label>
+              Polling (seconds)
+              <input id="pollingSeconds" type="number" min="15" max="3600" />
+            </label>
+            <button id="savePollingBtn" class="secondary">Save Polling</button>
+          </div>
+        </section>
+
+        <section id="serverCard" class="venix-card">
+          <div class="card-head">
+            <h3>Server Overview</h3>
+            <p class="muted">Jobs and status counts per server (latest snapshot)</p>
+          </div>
+          <div id="serverChartBars" class="server-chart"></div>
+          <div class="table-wrap">
+            <table id="serverSummaryTable">
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Total Jobs</th>
+                  <th>Success</th>
+                  <th>Warning</th>
+                  <th>Failed</th>
+                  <th>Running</th>
+                  <th>Unknown</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="rcloneCard" class="venix-card">
+          <div class="card-head">
+            <h3>Rclone File Overview</h3>
+            <p class="muted">Latest file-backup result per server (rclone only)</p>
+          </div>
+          <div class="table-wrap">
+            <table id="rcloneSummaryTable">
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Total Files</th>
+                  <th>Success</th>
+                  <th>Failed</th>
+                  <th>Running</th>
+                  <th>Unknown</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="latestCard" class="venix-card">
+          <div class="card-head">
+            <h3>Latest Status</h3>
+          </div>
+          <div class="table-wrap">
+            <table id="latestTable">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Job</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Next run</th>
+                  <th>Ended</th>
+                  <th>Collected</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="historyCard" class="venix-card">
+          <div class="card-head">
+            <h3>Recent History</h3>
+          </div>
+          <div class="table-wrap">
+            <table id="historyTable">
+              <thead>
+                <tr>
+                  <th>Collected</th>
+                  <th>Source</th>
+                  <th>Job</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Next run</th>
+                  <th>Ended</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="history-pager">
+            <div class="history-page-info" id="historyPageInfo">Page 1 / 1</div>
+            <div class="history-page-controls">
+              <label>
+                Rows
+                <select id="historyPageSize">
+                  <option value="20">20</option>
+                  <option value="30" selected>30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </label>
+              <button id="historyPrevBtn" class="secondary">Prev</button>
+              <button id="historyNextBtn" class="secondary">Next</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      window.__BOOTSTRAP__ = { generatedAt: "{{ generated_at }}" };
+    </script>
+    <script src="/static/app.js?v={{ generated_at }}"></script>
+  </body>
+</html>
