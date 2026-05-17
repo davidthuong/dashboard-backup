@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backup Dashboard - Login</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-card">
+      <h1>Backup Dashboard</h1>
+      <p class="muted">Admin login</p>
+      <p class="error" id="errorLine">{% if error %}{{ error }}{% endif %}</p>
+      <form id="loginForm">
+        <label>Username</label>
+        <input type="text" name="username" id="username" required />
+        <label>Password</label>
+        <input type="password" name="password" id="password" required />
+        <button type="submit">Login</button>
+      </form>
+    </main>
+    <script>
+      const form = document.getElementById("loginForm");
+      const errorLine = document.getElementById("errorLine");
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorLine.textContent = "";
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
+        const res = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ username, password }),
+        });
+        if (res.ok) {
+          window.location.href = "/";
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errorLine.textContent = data.error || "Login failed";
+      });
+    </script>
+  </body>
+</html>
