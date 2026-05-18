@@ -2,6 +2,41 @@
 
 These scripts help remote backup servers push status to the central dashboard (`/api/ingest/status`).
 
+## 0) Quick Start (NEW - Hub Trigger)
+
+If you want **hub click -> node run backup -> node push result** (no SSH, no cron), do this:
+
+1. Pull latest code on hub and nodes:
+```bash
+cd /opt/backup-dashboard
+git pull origin main
+```
+
+2. Hub `.env`:
+- `AGENT_TRIGGER_ENABLED=true`
+- `INGEST_ENABLED=true`
+- set `AGENT_NODES_JSON` with node URL `/collect` + `shared_secret`
+
+3. Windows node:
+- copy/update `scripts/agent/*`
+- install receiver task:
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windows_install_secure_receiver_task.ps1 -SharedSecret "<shared-secret>" -AllowedHubIPs "<hub-ip>"
+```
+
+4. Linux node:
+- install receiver service:
+```bash
+sudo apt update && sudo apt install -y socat openssl jq curl
+sudo SERVICE_NAME=backuphub-secure-receiver ENV_FILE=/opt/backup-dashboard/scripts/agent/linux_secure_receiver.env RUNNER_SCRIPT=/opt/backup-dashboard/scripts/agent/linux_secure_receiver_runner.sh /opt/backup-dashboard/scripts/agent/linux_install_secure_receiver_service.sh
+```
+
+5. From dashboard, click **Trigger Agents**.
+
+This new flow uses:
+- Windows: `windows_secure_receiver.ps1` + `windows_run_backup_script_and_push.ps1`
+- Linux: `linux_secure_receiver.sh` + `linux_secure_receiver_worker.sh`
+
 ## 1) Runtime requirement
 
 - Linux: `bash` + `curl` (+ `rclone` for backup jobs)
@@ -53,7 +88,7 @@ These scripts help remote backup servers push status to the central dashboard (`
 - `linux_remove_secure_receiver_service.sh`:
   - Remove Linux secure receiver systemd service.
 
-## 3) Linux setup (cron)
+## 3) Linux setup (cron) - Legacy/Optional
 
 1. Copy project/scripts to remote node (or clone repo).
 2. Edit variables in:
@@ -76,7 +111,7 @@ chmod +x scripts/agent/linux_push_from_log.sh
 15 1 * * * /opt/backup-dashboard/scripts/agent/linux_push_from_log.sh >> /var/log/backup-agent.log 2>&1
 ```
 
-## 4) Windows setup (Task Scheduler)
+## 4) Windows setup (Task Scheduler) - Legacy/Optional
 
 1. Keep scripts in e.g. `C:\backup-dashboard\scripts\agent\`.
 2. Edit values in:
