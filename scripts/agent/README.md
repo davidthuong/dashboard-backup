@@ -171,10 +171,12 @@ powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windo
 ```
 
 Security notes:
-- Use strong random `shared_secret` per node.
+- Use strong random `shared_secret` per node (>= 32 chars).
 - Keep `RequestTtlSeconds` low (default 120s).
 - Restrict node firewall to Hub IP only.
 - Prefer HTTPS / private network between hub and node.
+- Keep `AllowInsecureHubUrl=false` unless you are in isolated private lab network.
+- Restrict `AllowedScriptRoots` and `AllowedLogRoots` to minimum needed folders.
 
 ## 7) Secure Hub-Triggered Mode (Linux)
 
@@ -205,12 +207,14 @@ sudo SERVICE_NAME=backuphub-secure-receiver \
 ```
 
 Edit env file:
-- `SHARED_SECRET=<same as AGENT_NODES_JSON.shared_secret>`
+- `SHARED_SECRET=<same as AGENT_NODES_JSON.shared_secret, >= 32 chars>`
 - `ALLOWED_HUB_IPS=<hub-ip>`
 - `DEFAULT_HUB_URL=https://<hub-domain-or-ip>`
 - `DEFAULT_INGEST_TOKEN=<INGEST_API_TOKEN>`
 - `DEFAULT_NODE_NAME=<linux-node-name>`
 - `DEFAULT_RCLONE_LOG_PATH=/var/log/rclone_da_backup.log`
+- `ALLOWED_ACTIONS=health,rclone_log_push`
+- `ALLOWED_LOG_ROOTS=/var/log,/opt/backup-logs`
 
 Restart service after edits:
 
