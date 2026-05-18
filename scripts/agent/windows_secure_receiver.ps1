@@ -5,6 +5,10 @@ param(
   [string]$AllowedHubIPs = "127.0.0.1,::1",
   [int]$RequestTtlSeconds = 120,
   [int]$MaxBodyBytes = 1048576,
+  [string]$AllowedActions = "health,rclone_log_push,icewarp_backup_push,backup_script_push",
+  [string]$AllowedScriptRoots = "D:\scripts",
+  [string]$AllowedLogRoots = "D:\scripts,C:\Logs",
+  [bool]$AllowInsecureHubUrl = $false,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
   [string]$BackupScriptWrapper = "D:\scripts\windows_run_backup_script_and_push.ps1",
@@ -19,8 +23,8 @@ $ErrorActionPreference = "Stop"
 $usedNonces = New-Object 'System.Collections.Generic.Dictionary[string,datetime]'
 $allowlist = @($AllowedHubIPs.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
 
-if ([string]::IsNullOrWhiteSpace($SharedSecret) -or $SharedSecret -eq "change_me" -or $SharedSecret.Length -lt 16) {
-  throw "SharedSecret is weak or missing. Use at least 16 random chars."
+if ([string]::IsNullOrWhiteSpace($SharedSecret) -or $SharedSecret -eq "change_me" -or $SharedSecret.Length -lt 32) {
+  throw "SharedSecret is weak or missing. Use at least 32 random chars."
 }
 
 function To-Hex([byte[]]$bytes) {
@@ -70,6 +74,51 @@ function Is-IpAllowed([string]$ip) {
   return $allowlist -contains $ip
 }
 
+function Get-PathList([string]$csv) {
+  return @($csv.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+}
+
+function Is-ActionAllowed([string]$action) {
+  $allowed = Get-PathList $AllowedActions
+  return $allowed -contains $action
+}
+
+function Is-HubUrlAllowed([string]$url) {
+  if ([string]::IsNullOrWhiteSpace($url)) { return $false }
+  $lower = $url.ToLowerInvariant()
+  if ($AllowInsecureHubUrl) {
+    return $lower.StartsWith("http://") -or $lower.StartsWith("https://")
+  }
+  return $lower.StartsWith("https://")
+}
+
+function Is-PathUnderRoots([string]$candidate, [string]$rootsCsv) {
+  if ([string]::IsNullOrWhiteSpace($candidate)) { return $false }
+  $fullCandidate = ""
+  try {
+    $fullCandidate = [System.IO.Path]::GetFullPath($candidate)
+  } catch {
+    return $false
+  }
+
+  foreach ($root in (Get-PathList $rootsCsv)) {
+    $fullRoot = ""
+    try {
+      $fullRoot = [System.IO.Path]::GetFullPath($root)
+    } catch {
+      continue
+    }
+    $rootNorm = $fullRoot.TrimEnd("\")
+    if ($fullCandidate.Equals($rootNorm, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+    if ($fullCandidate.StartsWith($rootNorm + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+  }
+  return $false
+}
+
 function Is-Replay([string]$nonce, [datetime]$nowUtc) {
   $expired = @()
   foreach ($kv in $usedNonces.GetEnumerator()) {
@@ -95,6 +144,9 @@ function Run-Action($action, $payload) {
       }
       $hubUrl = [string]($payload.hub_url | ForEach-Object { $_ }) 
       if ([string]::IsNullOrWhiteSpace($hubUrl)) { $hubUrl = $DefaultHubUrl }
+      if (-not (Is-HubUrlAllowed $hubUrl)) {
+        throw "hub_url must use https (or set AllowInsecureHubUrl=true)"
+      }
       $ingestToken = [string]($payload.ingest_token | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($ingestToken)) { $ingestToken = $DefaultIngestToken }
       $nodeName = [string]($payload.node_name | ForEach-Object { $_ })
@@ -103,6 +155,9 @@ function Run-Action($action, $payload) {
       if ([string]::IsNullOrWhiteSpace($jobName)) { $jobName = $DefaultRcloneJobName }
       $logPath = [string]($payload.log_path | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($logPath)) { $logPath = $DefaultRcloneLogPath }
+      if (-not (Is-PathUnderRoots $logPath $AllowedLogRoots)) {
+        throw "log_path is outside AllowedLogRoots"
+      }
 
       & powershell -NoProfile -ExecutionPolicy Bypass -File $RclonePushScript `
         -HubUrl $hubUrl `
@@ -125,6 +180,9 @@ function Run-Action($action, $payload) {
       }
       $hubUrl = [string]($payload.hub_url | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($hubUrl)) { $hubUrl = $DefaultHubUrl }
+      if (-not (Is-HubUrlAllowed $hubUrl)) {
+        throw "hub_url must use https (or set AllowInsecureHubUrl=true)"
+      }
       $ingestToken = [string]($payload.ingest_token | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($ingestToken)) { $ingestToken = $DefaultIngestToken }
       $nodeName = [string]($payload.node_name | ForEach-Object { $_ })
@@ -135,6 +193,15 @@ function Run-Action($action, $payload) {
       if ([string]::IsNullOrWhiteSpace($backupScriptPath)) { $backupScriptPath = "D:\scripts\backup-icewarp.ps1" }
       $mainLogPath = [string]($payload.main_log_path | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($mainLogPath)) { $mainLogPath = "D:\scripts\backup-icewarp.log" }
+      if (-not $backupScriptPath.ToLowerInvariant().EndsWith(".ps1")) {
+        throw "backup_script_path must be .ps1"
+      }
+      if (-not (Is-PathUnderRoots $backupScriptPath $AllowedScriptRoots)) {
+        throw "backup_script_path is outside AllowedScriptRoots"
+      }
+      if (-not (Is-PathUnderRoots $mainLogPath $AllowedLogRoots)) {
+        throw "main_log_path is outside AllowedLogRoots"
+      }
 
       & powershell -NoProfile -ExecutionPolicy Bypass -File $BackupScriptWrapper `
         -HubUrl $hubUrl `
@@ -209,6 +276,14 @@ try {
         JsonResponse $ctx 401 @{ ok = $false; error = "Invalid timestamp" }
         continue
       }
+      if ($nonce.Length -lt 16 -or $nonce.Length -gt 128 -or $nonce -notmatch "^[A-Za-z0-9._-]+$") {
+        JsonResponse $ctx 401 @{ ok = $false; error = "Invalid nonce format" }
+        continue
+      }
+      if ($sig -notmatch "^[a-f0-9]{64}$") {
+        JsonResponse $ctx 401 @{ ok = $false; error = "Invalid signature format" }
+        continue
+      }
 
       $nowTs = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
       if ([math]::Abs($nowTs - $ts) -gt $RequestTtlSeconds) {
@@ -230,6 +305,10 @@ try {
       $payload = $body | ConvertFrom-Json
       $action = [string]$payload.action
       $actionPayload = $payload.payload
+      if (-not (Is-ActionAllowed $action)) {
+        JsonResponse $ctx 400 @{ ok = $false; error = "Action not allowed" }
+        continue
+      }
 
       $result = Run-Action $action $actionPayload
       JsonResponse $ctx 200 @{ ok = $true; result = $result }

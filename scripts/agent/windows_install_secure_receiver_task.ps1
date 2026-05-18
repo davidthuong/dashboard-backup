@@ -9,6 +9,10 @@ param(
   [string]$AllowedHubIPs = "103.238.213.14,127.0.0.1",
   [int]$RequestTtlSeconds = 120,
   [int]$MaxBodyBytes = 1048576,
+  [string]$AllowedActions = "health,rclone_log_push,icewarp_backup_push,backup_script_push",
+  [string]$AllowedScriptRoots = "D:\scripts",
+  [string]$AllowedLogRoots = "D:\scripts,C:\Logs",
+  [bool]$AllowInsecureHubUrl = $false,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
   [string]$DefaultHubUrl = "https://103.238.213.14",
@@ -39,8 +43,8 @@ function Get-PortFromPrefix([string]$prefix) {
   return 9189
 }
 
-if ($SharedSecret.Length -lt 16) {
-  throw "SharedSecret too short. Use at least 16 chars."
+if ($SharedSecret.Length -lt 32) {
+  throw "SharedSecret too short. Use at least 32 chars."
 }
 
 $adminPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -96,6 +100,10 @@ $actionArgs = @(
   "-AllowedHubIPs", (Quote-Arg $AllowedHubIPs),
   "-RequestTtlSeconds", $RequestTtlSeconds,
   "-MaxBodyBytes", $MaxBodyBytes,
+  "-AllowedActions", (Quote-Arg $AllowedActions),
+  "-AllowedScriptRoots", (Quote-Arg $AllowedScriptRoots),
+  "-AllowedLogRoots", (Quote-Arg $AllowedLogRoots),
+  "-AllowInsecureHubUrl", $AllowInsecureHubUrl,
   "-RclonePushScript", (Quote-Arg $RclonePushScript),
   "-IcewarpScript", (Quote-Arg $IcewarpScript),
   "-DefaultHubUrl", (Quote-Arg $DefaultHubUrl),

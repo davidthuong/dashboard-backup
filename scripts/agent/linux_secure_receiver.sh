@@ -12,6 +12,9 @@ ALLOWED_HUB_IPS="${ALLOWED_HUB_IPS:-127.0.0.1,::1}"
 REQUEST_TTL_SECONDS="${REQUEST_TTL_SECONDS:-120}"
 MAX_BODY_BYTES="${MAX_BODY_BYTES:-1048576}"
 NONCE_CACHE_FILE="${NONCE_CACHE_FILE:-/tmp/backup-agent-nonces.db}"
+ALLOWED_ACTIONS="${ALLOWED_ACTIONS:-health,rclone_log_push}"
+ALLOWED_LOG_ROOTS="${ALLOWED_LOG_ROOTS:-/var/log,/opt/backup-logs}"
+ALLOW_INSECURE_HUB_URL="${ALLOW_INSECURE_HUB_URL:-false}"
 
 RCLONE_PUSH_SCRIPT="${RCLONE_PUSH_SCRIPT:-/opt/backup-dashboard/scripts/agent/linux_push_from_log.sh}"
 DEFAULT_HUB_URL="${DEFAULT_HUB_URL:-http://127.0.0.1:8000}"
@@ -33,8 +36,8 @@ require_bin() {
   fi
 }
 
-if [[ -z "${SHARED_SECRET}" || "${SHARED_SECRET}" == "change_me" || ${#SHARED_SECRET} -lt 16 ]]; then
-  echo "[agent] SHARED_SECRET is weak/missing. Use at least 16 random chars." >&2
+if [[ -z "${SHARED_SECRET}" || "${SHARED_SECRET}" == "change_me" || ${#SHARED_SECRET} -lt 32 ]]; then
+  echo "[agent] SHARED_SECRET is weak/missing. Use at least 32 random chars." >&2
   exit 1
 fi
 
@@ -56,6 +59,9 @@ export ALLOWED_HUB_IPS
 export REQUEST_TTL_SECONDS
 export MAX_BODY_BYTES
 export NONCE_CACHE_FILE
+export ALLOWED_ACTIONS
+export ALLOWED_LOG_ROOTS
+export ALLOW_INSECURE_HUB_URL
 export RCLONE_PUSH_SCRIPT
 export DEFAULT_HUB_URL
 export DEFAULT_INGEST_TOKEN

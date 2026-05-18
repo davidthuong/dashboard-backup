@@ -9,6 +9,9 @@ ALLOWED_HUB_IPS="${ALLOWED_HUB_IPS:-127.0.0.1,::1}"
 REQUEST_TTL_SECONDS="${REQUEST_TTL_SECONDS:-120}"
 MAX_BODY_BYTES="${MAX_BODY_BYTES:-1048576}"
 NONCE_CACHE_FILE="${NONCE_CACHE_FILE:-/tmp/backup-agent-nonces.db}"
+ALLOWED_ACTIONS="${ALLOWED_ACTIONS:-health,rclone_log_push}"
+ALLOWED_LOG_ROOTS="${ALLOWED_LOG_ROOTS:-/var/log,/opt/backup-logs}"
+ALLOW_INSECURE_HUB_URL="${ALLOW_INSECURE_HUB_URL:-false}"
 
 RCLONE_PUSH_SCRIPT="${RCLONE_PUSH_SCRIPT:-/opt/backup-dashboard/scripts/agent/linux_push_from_log.sh}"
 DEFAULT_HUB_URL="${DEFAULT_HUB_URL:-http://127.0.0.1:8000}"
@@ -26,6 +29,11 @@ trim_cr() {
 
 json_escape() {
   sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a;N;$!ba;s/\n/\\n/g'
+}
+
+trim_spaces() {
+  local s="${1:-}"
+  printf "%s" "${s}" | xargs
 }
 
 send_json() {
@@ -82,7 +90,9 @@ cleanup_old_nonces() {
   local now_ts="${1:-0}"
   local ttl="${2:-120}"
   local keep_after=$((now_ts - ttl))
+  umask 077
   touch "${NONCE_CACHE_FILE}"
+  chmod 600 "${NONCE_CACHE_FILE}" 2>/dev/null || true
   awk -F'\t' -v min_ts="${keep_after}" 'NF>=2 { if ($2 >= min_ts) print $0 }' "${NONCE_CACHE_FILE}" > "${NONCE_CACHE_FILE}.tmp" || true
   mv -f "${NONCE_CACHE_FILE}.tmp" "${NONCE_CACHE_FILE}"
 }
@@ -123,6 +133,50 @@ extract_json_with_jq() {
   printf "%s" "${input}" | jq -r "${expr} // empty" 2>/dev/null || true
 }
 
+is_action_allowed() {
+  local action="${1:-}"
+  local item
+  IFS=',' read -r -a items <<< "${ALLOWED_ACTIONS}"
+  for item in "${items[@]}"; do
+    item="$(trim_spaces "${item}")"
+    [[ -n "${item}" && "${item}" == "${action}" ]] && return 0
+  done
+  return 1
+}
+
+validate_hub_url() {
+  local url="${1:-}"
+  [[ -n "${url}" ]] || return 1
+  local lower="${url,,}"
+  if [[ "${ALLOW_INSECURE_HUB_URL}" == "true" ]]; then
+    [[ "${lower}" == http://* || "${lower}" == https://* ]] || return 1
+    return 0
+  fi
+  [[ "${lower}" == https://* ]]
+}
+
+is_path_allowed() {
+  local candidate="${1:-}"
+  [[ -n "${candidate}" ]] || return 1
+  local abs_candidate
+  abs_candidate="$(readlink -f -- "${candidate}" 2>/dev/null || true)"
+  [[ -n "${abs_candidate}" ]] || return 1
+
+  local root
+  IFS=',' read -r -a roots <<< "${ALLOWED_LOG_ROOTS}"
+  for root in "${roots[@]}"; do
+    root="$(trim_spaces "${root}")"
+    [[ -n "${root}" ]] || continue
+    local abs_root
+    abs_root="$(readlink -f -- "${root}" 2>/dev/null || true)"
+    [[ -n "${abs_root}" ]] || continue
+    if [[ "${abs_candidate}" == "${abs_root}" || "${abs_candidate}" == "${abs_root}/"* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 run_rclone_log_push() {
   local payload_json="${1:-{}}"
 
@@ -148,6 +202,12 @@ run_rclone_log_push() {
   [[ -n "${log_path}" ]] || log_path="${DEFAULT_RCLONE_LOG_PATH}"
   [[ -n "${source_name}" ]] || source_name="${DEFAULT_SOURCE_NAME}"
   [[ -n "${max_lines}" ]] || max_lines="${DEFAULT_MAX_LINES}"
+  if ! validate_hub_url "${hub_url}"; then
+    safe_error "hub_url must use https (or set ALLOW_INSECURE_HUB_URL=true)"
+  fi
+  if ! is_path_allowed "${log_path}"; then
+    safe_error "log_path is outside ALLOWED_LOG_ROOTS"
+  fi
 
   set +e
   local output
@@ -251,6 +311,14 @@ main() {
     send_json 401 "{\"ok\":false,\"error\":\"Invalid timestamp\"}"
     exit 0
   fi
+  if ! [[ "${nonce}" =~ ^[A-Za-z0-9._-]{16,128}$ ]]; then
+    send_json 401 "{\"ok\":false,\"error\":\"Invalid nonce format\"}"
+    exit 0
+  fi
+  if ! [[ "${sig}" =~ ^[a-f0-9]{64}$ ]]; then
+    send_json 401 "{\"ok\":false,\"error\":\"Invalid signature format\"}"
+    exit 0
+  fi
 
   local now_ts
   now_ts="$(date +%s)"
@@ -281,6 +349,10 @@ main() {
   action="$(printf "%s" "${body}" | jq -r '.action // empty' 2>/dev/null || true)"
   payload_json="$(printf "%s" "${body}" | jq -c '.payload // {}' 2>/dev/null || true)"
   [[ -n "${payload_json}" ]] || payload_json='{}'
+  if ! is_action_allowed "${action}"; then
+    send_json 400 "{\"ok\":false,\"error\":\"Action not allowed\"}"
+    exit 0
+  fi
 
   case "${action}" in
     health)
