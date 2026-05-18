@@ -7,6 +7,7 @@ These scripts help remote backup servers push status to the central dashboard (`
 - Linux: `bash` + `curl` (+ `rclone` for backup jobs)
 - Windows: PowerShell + `Invoke-RestMethod` (+ `rclone` for backup jobs)
 - Python scripts are optional, not required.
+- Linux secure hub-trigger mode: add `socat` + `openssl` + `jq`
 
 ## 2) Script options
 
@@ -39,6 +40,16 @@ These scripts help remote backup servers push status to the central dashboard (`
   - Install secure receiver as startup scheduled task (`SYSTEM`), with URLACL + firewall rule.
 - `windows_remove_secure_receiver_task.ps1`:
   - Remove startup task (+ optional URLACL/firewall cleanup).
+- `linux_secure_receiver.sh`:
+  - Receive signed hub trigger requests on Linux (HMAC + timestamp + nonce + IP allowlist).
+- `linux_secure_receiver_worker.sh`:
+  - Internal request handler used by `linux_secure_receiver.sh`.
+- `linux_secure_receiver_runner.sh`:
+  - Keep Linux receiver running and auto-restart.
+- `linux_install_secure_receiver_service.sh`:
+  - Install Linux secure receiver as systemd service.
+- `linux_remove_secure_receiver_service.sh`:
+  - Remove Linux secure receiver systemd service.
 
 ## 3) Linux setup (cron)
 
@@ -159,3 +170,58 @@ Security notes:
 - Keep `RequestTtlSeconds` low (default 120s).
 - Restrict node firewall to Hub IP only.
 - Prefer HTTPS / private network between hub and node.
+
+## 7) Secure Hub-Triggered Mode (Linux)
+
+Install dependencies:
+
+```bash
+sudo apt update
+sudo apt install -y socat openssl jq curl
+```
+
+Make scripts executable:
+
+```bash
+chmod +x scripts/agent/linux_secure_receiver.sh
+chmod +x scripts/agent/linux_secure_receiver_worker.sh
+chmod +x scripts/agent/linux_secure_receiver_runner.sh
+chmod +x scripts/agent/linux_install_secure_receiver_service.sh
+chmod +x scripts/agent/linux_remove_secure_receiver_service.sh
+```
+
+Install as systemd service:
+
+```bash
+sudo SERVICE_NAME=backuphub-secure-receiver \
+  ENV_FILE=/opt/backup-dashboard/scripts/agent/linux_secure_receiver.env \
+  RUNNER_SCRIPT=/opt/backup-dashboard/scripts/agent/linux_secure_receiver_runner.sh \
+  /opt/backup-dashboard/scripts/agent/linux_install_secure_receiver_service.sh
+```
+
+Edit env file:
+- `SHARED_SECRET=<same as AGENT_NODES_JSON.shared_secret>`
+- `ALLOWED_HUB_IPS=<hub-ip>`
+- `DEFAULT_HUB_URL=https://<hub-domain-or-ip>`
+- `DEFAULT_INGEST_TOKEN=<INGEST_API_TOKEN>`
+- `DEFAULT_NODE_NAME=<linux-node-name>`
+- `DEFAULT_RCLONE_LOG_PATH=/var/log/rclone_da_backup.log`
+
+Restart service after edits:
+
+```bash
+sudo systemctl restart backuphub-secure-receiver
+sudo systemctl status backuphub-secure-receiver --no-pager
+```
+
+Hub `.env` sample:
+
+```env
+AGENT_TRIGGER_ENABLED=true
+AGENT_NODES_JSON=[{"name":"linux-bk01","url":"http://10.10.10.21:9189/collect","shared_secret":"<shared-secret>","verify_ssl":false,"action":"rclone_log_push","payload":{"job_name":"rclone-da","log_path":"/var/log/rclone_da_backup.log"}}]
+```
+
+Trigger from hub:
+- Dashboard button `Trigger Agents`
+- `POST /api/agents/trigger-all`
+- `POST /api/agents/trigger/{name}`

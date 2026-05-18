@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.config import Settings
+from app.services.log_source import parse_log_source, read_tail_lines
 from app.services.types import NormalizedJobStatus
 
 DA_TS_PATTERN = re.compile(r"^(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM))$", re.IGNORECASE)
@@ -19,13 +20,6 @@ def _parse_da_datetime(line: str) -> datetime | None:
         return datetime.strptime(match.group(1).upper(), "%m/%d/%Y %I:%M %p")
     except ValueError:
         return None
-
-
-def _parse_node_and_path(raw_path: str) -> tuple[str, str]:
-    if "::" in raw_path:
-        node, path = raw_path.split("::", 1)
-        return node.strip() or "unknown-node", path.strip()
-    return "local", raw_path
 
 
 def _extract_status(lines: list[str]) -> tuple[str, str, int, str]:
@@ -73,36 +67,33 @@ class DirectAdminParser:
 
         output: list[NormalizedJobStatus] = []
         for raw_path in paths:
-            node_name, parsed_path = _parse_node_and_path(raw_path)
-            path = Path(parsed_path)
-            if not path.exists():
+            try:
+                source = parse_log_source(raw_path, default_node="local")
+            except Exception as exc:
                 output.append(
                     NormalizedJobStatus(
                         source="directadmin",
-                        job_name=f"[{node_name}] {path.stem or str(path)}",
+                        job_name="directadmin_source_parse_error",
                         status="failed",
-                        message=f"Log file not found: {path}",
-                        raw_payload={"path": str(path), "node": node_name},
+                        message=str(exc),
+                        raw_payload={"raw_path": raw_path},
                     )
                 )
                 continue
 
             try:
-                lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-            except OSError as exc:
+                lines = read_tail_lines(source, max_lines=self.settings.directadmin_max_lines_per_file)
+            except Exception as exc:
                 output.append(
                     NormalizedJobStatus(
                         source="directadmin",
-                        job_name=f"[{node_name}] {path.stem or str(path)}",
+                        job_name=f"[{source.node_name}] {source.display_name}",
                         status="failed",
-                        message=f"Cannot read log file: {exc}",
-                        raw_payload={"path": str(path), "node": node_name},
+                        message=f"Cannot read log source: {exc}",
+                        raw_payload={"path": source.path_for_payload, "node": source.node_name},
                     )
                 )
                 continue
-
-            if len(lines) > self.settings.directadmin_max_lines_per_file:
-                lines = lines[-self.settings.directadmin_max_lines_per_file :]
 
             status, message, backed_up_count, first_error = _extract_status(lines)
             ended_at = None
@@ -112,17 +103,18 @@ class DirectAdminParser:
                     ended_at = ts
                     break
 
+            node_name = source.node_name
             output.append(
                 NormalizedJobStatus(
                     source="directadmin",
-                    job_name=f"[{node_name}] {path.stem or path.name}",
+                    job_name=f"[{node_name}] {source.display_name}",
                     status=status,
                     message=message,
                     started_at=None,
                     ended_at=ended_at,
                     raw_payload={
                         "node": node_name,
-                        "path": str(path),
+                        "path": source.path_for_payload,
                         "backed_up_users": backed_up_count,
                         "first_error": first_error,
                         "last_line": next((ln for ln in reversed(lines) if ln.strip()), ""),

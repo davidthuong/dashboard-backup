@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.config import Settings
+from app.services.log_source import parse_log_source, read_tail_lines
 from app.services.types import NormalizedJobStatus
 
 RCLONE_TS_PATTERN = re.compile(r"^(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})")
@@ -216,14 +217,6 @@ class RcloneParser:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    @staticmethod
-    def _parse_node_and_path(raw_path: str) -> tuple[str, str]:
-        # Format: node_name::/path/to/log or node_name::C:\logs\job.log
-        if "::" in raw_path:
-            node, path = raw_path.split("::", 1)
-            return node.strip() or "unknown-node", path.strip()
-        return "local", raw_path
-
     def collect(self) -> list[NormalizedJobStatus]:
         if not self.settings.rclone_enabled:
             return []
@@ -242,39 +235,42 @@ class RcloneParser:
 
         output: list[NormalizedJobStatus] = []
         for raw_path in paths:
-            node_name, parsed_path = self._parse_node_and_path(raw_path)
-            path = Path(parsed_path)
-            if not path.exists():
+            try:
+                source = parse_log_source(raw_path, default_node="local")
+            except Exception as exc:
                 output.append(
                     NormalizedJobStatus(
                         source="rclone",
-                        job_name=f"[{node_name}] {path.stem or str(path)}",
+                        job_name="rclone_source_parse_error",
                         status="failed",
-                        message=f"Log file not found: {path}",
-                        raw_payload={"path": str(path), "node": node_name},
+                        message=str(exc),
+                        raw_payload={"raw_path": raw_path},
                     )
                 )
                 continue
 
             try:
-                lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-            except OSError as exc:
+                lines = read_tail_lines(source, max_lines=self.settings.rclone_max_lines_per_file)
+            except Exception as exc:
                 output.append(
                     NormalizedJobStatus(
                         source="rclone",
-                        job_name=f"[{node_name}] {path.stem or str(path)}",
+                        job_name=f"[{source.node_name}] {source.display_name}",
                         status="failed",
-                        message=f"Cannot read log file: {exc}",
-                        raw_payload={"path": str(path), "node": node_name},
+                        message=f"Cannot read log source: {exc}",
+                        raw_payload={"path": source.path_for_payload, "node": source.node_name},
                     )
                 )
                 continue
 
-            if len(lines) > self.settings.rclone_max_lines_per_file:
-                lines = lines[-self.settings.rclone_max_lines_per_file :]
+            display_path = Path(source.remote_path) if source.is_remote else (source.local_path or Path(source.raw_spec))
+            node_name = source.node_name
 
-            marker_records = _parse_marker_jobs(path=path, node_name=node_name, lines=lines)
+            marker_records = _parse_marker_jobs(path=display_path, node_name=node_name, lines=lines)
             if marker_records:
+                for item in marker_records:
+                    if isinstance(item.raw_payload, dict):
+                        item.raw_payload["path"] = source.path_for_payload
                 output.extend(marker_records)
                 continue
 
@@ -298,13 +294,13 @@ class RcloneParser:
             output.append(
                 NormalizedJobStatus(
                     source="rclone",
-                    job_name=f"[{node_name}] {path.stem or path.name}",
+                    job_name=f"[{node_name}] {source.display_name}",
                     status=status,
                     message=message if message else _last_non_empty(lines),
                     started_at=None,
                     ended_at=ended_at,
                     raw_payload={
-                        "path": str(path),
+                        "path": source.path_for_payload,
                         "node": node_name,
                         "last_line": _last_non_empty(lines),
                     },
