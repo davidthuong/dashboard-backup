@@ -7,6 +7,7 @@ param(
   [int]$MaxBodyBytes = 1048576,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
+  [string]$BackupScriptWrapper = "D:\scripts\windows_run_backup_script_and_push.ps1",
   [string]$DefaultHubUrl = "https://103.238.213.14",
   [string]$DefaultIngestToken = "change_me_ingest",
   [string]$DefaultNodeName = "win-bk01",
@@ -116,6 +117,32 @@ function Run-Action($action, $payload) {
         throw "Icewarp script not found: $IcewarpScript"
       }
       & powershell -NoProfile -ExecutionPolicy Bypass -File $IcewarpScript
+      return @{ action = $action; exit_code = $LASTEXITCODE }
+    }
+    "backup_script_push" {
+      if (!(Test-Path $BackupScriptWrapper)) {
+        throw "Backup script wrapper not found: $BackupScriptWrapper"
+      }
+      $hubUrl = [string]($payload.hub_url | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($hubUrl)) { $hubUrl = $DefaultHubUrl }
+      $ingestToken = [string]($payload.ingest_token | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($ingestToken)) { $ingestToken = $DefaultIngestToken }
+      $nodeName = [string]($payload.node_name | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($nodeName)) { $nodeName = $DefaultNodeName }
+      $jobName = [string]($payload.job_name | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($jobName)) { $jobName = "custom-backup-job" }
+      $backupScriptPath = [string]($payload.backup_script_path | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($backupScriptPath)) { $backupScriptPath = "D:\scripts\backup-icewarp.ps1" }
+      $mainLogPath = [string]($payload.main_log_path | ForEach-Object { $_ })
+      if ([string]::IsNullOrWhiteSpace($mainLogPath)) { $mainLogPath = "D:\scripts\backup-icewarp.log" }
+
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $BackupScriptWrapper `
+        -HubUrl $hubUrl `
+        -IngestToken $ingestToken `
+        -NodeName $nodeName `
+        -JobName $jobName `
+        -BackupScriptPath $backupScriptPath `
+        -MainLogPath $mainLogPath
       return @{ action = $action; exit_code = $LASTEXITCODE }
     }
     "health" {
