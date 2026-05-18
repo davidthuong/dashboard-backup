@@ -34,6 +34,8 @@ These scripts help remote backup servers push status to the central dashboard (`
   - Includes `error_reason`, `last_error_line`, `last_10_log_lines` in payload for troubleshooting.
 - `windows_secure_receiver.ps1`:
   - Receive signed hub trigger requests (HMAC + timestamp + nonce + IP allowlist).
+- `windows_run_backup_script_and_push.ps1`:
+  - Run any existing Windows backup script (example `backup-icewarp.ps1`) and push final status/log tail to hub.
 - `windows_secure_receiver_runner.ps1`:
   - Keep receiver running and auto-restart if it exits/crashes.
 - `windows_install_secure_receiver_task.ps1`:
@@ -152,6 +154,9 @@ powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windo
 3. Configure hub `.env`:
 - `AGENT_TRIGGER_ENABLED=true`
 - `AGENT_NODES_JSON=[{"name":"win-bk01","url":"http://win-bk01:9189/collect","shared_secret":"<shared-secret>","verify_ssl":false,"action":"rclone_log_push","payload":{"job_name":"nightly-share","log_path":"C:\\Logs\\rclone-nightly-share.log"}}]`
+
+Example to trigger an existing backup script file on Windows node:
+- `AGENT_NODES_JSON=[{"name":"win-icewarp-01","url":"http://win-icewarp-01:9189/collect","shared_secret":"<shared-secret>","verify_ssl":false,"action":"backup_script_push","payload":{"job_name":"icewarp-nightly","backup_script_path":"D:\\scripts\\backup-icewarp.ps1","main_log_path":"D:\\scripts\\backup-icewarp.log"}}]`
 
 4. Trigger from dashboard button `Trigger Agents` or API:
 - `POST /api/agents/trigger-all`
