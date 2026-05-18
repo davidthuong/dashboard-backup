@@ -85,16 +85,22 @@ Vi du `VEEAM_TARGETS_JSON`:
 ```
 
 rclone pull mode:
-- `RCLONE_LOG_PATHS` ho tro format `node::path`
+- `RCLONE_LOG_PATHS` ho tro:
+  - `node::path` (local/mounted path)
+  - `node::ssh://user@host:22/path/log` (hub SSH pull)
 - Vi du:
   - `win-bk01::\\win-bk01\logs\rclone-nightly.log`
   - `linux-bk01::/mnt/logshare/linux-bk01/rclone.log`
+  - `linux-bk02::ssh://root@10.10.10.22:22/var/log/rclone_da_backup.log`
 
 DirectAdmin pull mode:
 - `DIRECTADMIN_ENABLED=true`
-- `DIRECTADMIN_LOG_PATHS` ho tro format `node::path`
+- `DIRECTADMIN_LOG_PATHS` ho tro:
+  - `node::path` (local/mounted path)
+  - `node::ssh://user@host:22/path/log` (hub SSH pull)
 - Vi du:
   - `da-node-01::/var/log/directadmin/backup.log`
+  - `da-node-02::ssh://root@10.10.10.31:22/var/log/directadmin/backup.log`
 
 ## API ingest (node -> hub)
 
@@ -144,6 +150,10 @@ Co san:
 - `scripts/agent/windows_secure_receiver_runner.ps1` (auto-restart receiver)
 - `scripts/agent/windows_install_secure_receiver_task.ps1` (install startup task + firewall/urlacl)
 - `scripts/agent/windows_remove_secure_receiver_task.ps1` (remove startup task + cleanup)
+- `scripts/agent/linux_secure_receiver.sh` (secure hub-trigger listener for Linux)
+- `scripts/agent/linux_secure_receiver_runner.sh` (auto-restart receiver)
+- `scripts/agent/linux_install_secure_receiver_service.sh` (install systemd service)
+- `scripts/agent/linux_remove_secure_receiver_service.sh` (remove systemd service)
 
 Khong muon dung Python:
 - Dung truc tiep 4 script shell/PowerShell:
