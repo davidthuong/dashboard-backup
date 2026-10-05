@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import get_settings, validate_runtime_security
 from app.db import SessionLocal, init_db
 from app.routers import agents, auth, dashboard, ingest
+from app.services.agent_schedule import AgentAutoTrigger
 from app.services.agent_trigger import AgentTriggerService
 from app.services.alerts import AlertManager
 from app.services.collector import BackupCollector
@@ -34,6 +35,11 @@ async def lifespan(app: FastAPI):
     collector = BackupCollector(veeam_client=veeam_client, rclone_parser=rclone_parser, directadmin_parser=directadmin_parser)
     alert_manager = AlertManager(settings=settings)
     agent_trigger_service = AgentTriggerService(settings=settings)
+    agent_auto_trigger = AgentAutoTrigger(
+        trigger_service=agent_trigger_service,
+        alert_manager=alert_manager,
+        settings=settings,
+    )
     polling_manager = PollingManager(
         collector=collector,
         alert_manager=alert_manager,
@@ -70,8 +76,12 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Pull collection is disabled (ingest-only mode). Scheduler is not started.")
 
+    # Independent of pull collection: ingest-only hubs still need agents triggered.
+    agent_auto_trigger.start()
+
     yield
 
+    agent_auto_trigger.shutdown()
     polling_manager.shutdown()
 
 
