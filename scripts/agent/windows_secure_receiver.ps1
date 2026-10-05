@@ -8,7 +8,8 @@ param(
   [string]$AllowedActions = "health,rclone_log_push,icewarp_backup_push,backup_script_push",
   [string]$AllowedScriptRoots = "D:\scripts",
   [string]$AllowedLogRoots = "D:\scripts,C:\Logs",
-  [bool]$AllowInsecureHubUrl = $false,
+  [ValidateSet(0, 1)]
+  [int]$AllowInsecureHubUrl = 0,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
   [string]$BackupScriptWrapper = "D:\scripts\windows_run_backup_script_and_push.ps1",
@@ -86,7 +87,7 @@ function Is-ActionAllowed([string]$action) {
 function Is-HubUrlAllowed([string]$url) {
   if ([string]::IsNullOrWhiteSpace($url)) { return $false }
   $lower = $url.ToLowerInvariant()
-  if ($AllowInsecureHubUrl) {
+  if ($AllowInsecureHubUrl -eq 1) {
     return $lower.StartsWith("http://") -or $lower.StartsWith("https://")
   }
   return $lower.StartsWith("https://")
@@ -145,7 +146,7 @@ function Run-Action($action, $payload) {
       $hubUrl = [string]($payload.hub_url | ForEach-Object { $_ }) 
       if ([string]::IsNullOrWhiteSpace($hubUrl)) { $hubUrl = $DefaultHubUrl }
       if (-not (Is-HubUrlAllowed $hubUrl)) {
-        throw "hub_url must use https (or set AllowInsecureHubUrl=true)"
+        throw "hub_url must use https (or set AllowInsecureHubUrl=1)"
       }
       $ingestToken = [string]($payload.ingest_token | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($ingestToken)) { $ingestToken = $DefaultIngestToken }
@@ -181,7 +182,7 @@ function Run-Action($action, $payload) {
       $hubUrl = [string]($payload.hub_url | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($hubUrl)) { $hubUrl = $DefaultHubUrl }
       if (-not (Is-HubUrlAllowed $hubUrl)) {
-        throw "hub_url must use https (or set AllowInsecureHubUrl=true)"
+        throw "hub_url must use https (or set AllowInsecureHubUrl=1)"
       }
       $ingestToken = [string]($payload.ingest_token | ForEach-Object { $_ })
       if ([string]::IsNullOrWhiteSpace($ingestToken)) { $ingestToken = $DefaultIngestToken }

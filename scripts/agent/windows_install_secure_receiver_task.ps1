@@ -89,6 +89,8 @@ if ($SetupFirewall) {
     -Profile Any | Out-Null
 }
 
+$allowInsecureHubUrlValue = if ($AllowInsecureHubUrl) { 1 } else { 0 }
+
 $actionArgs = @(
   "-NoProfile",
   "-ExecutionPolicy", "Bypass",
@@ -103,7 +105,7 @@ $actionArgs = @(
   "-AllowedActions", (Quote-Arg $AllowedActions),
   "-AllowedScriptRoots", (Quote-Arg $AllowedScriptRoots),
   "-AllowedLogRoots", (Quote-Arg $AllowedLogRoots),
-  "-AllowInsecureHubUrl", $AllowInsecureHubUrl,
+  "-AllowInsecureHubUrl", $allowInsecureHubUrlValue,
   "-RclonePushScript", (Quote-Arg $RclonePushScript),
   "-IcewarpScript", (Quote-Arg $IcewarpScript),
   "-DefaultHubUrl", (Quote-Arg $DefaultHubUrl),
