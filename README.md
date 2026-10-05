@@ -137,6 +137,18 @@ This mode uses HMAC signature + timestamp + nonce (anti-replay) on node receiver
 
 Thu muc: [scripts/agent/README.md](c:/Users/Admin/Documents/tool-work/dashboard backup/scripts/agent/README.md)
 
+Them server (node) moi vao hub: [ADD_NODE.md](ADD_NODE.md)
+
+Tu dong trigger agent hang ngay: `AGENT_AUTO_TRIGGER_TIMES=07:00` (gio theo `TIMEZONE`, nhieu gio cach nhau dau phay).
+
+Kiem tra node tu hub:
+
+```bash
+docker exec backup-dashboard-app python -m app.agent_cli list
+docker exec backup-dashboard-app python -m app.agent_cli health
+docker exec backup-dashboard-app python -m app.agent_cli trigger <name>|--all
+```
+
 Co san:
 - `scripts/agent/push_by_exit_code.py`
 - `scripts/agent/report_rclone_log.py`

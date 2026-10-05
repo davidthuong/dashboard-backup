@@ -2,6 +2,8 @@
 
 These scripts help remote backup servers push status to the central dashboard (`/api/ingest/status`).
 
+Step-by-step checklist for adding a new node: [ADD_NODE.md](../../ADD_NODE.md)
+
 ## 0) Quick Start (NEW - Hub Trigger)
 
 If you want **hub click -> node run backup -> node push result** (no SSH, no cron), do this:
