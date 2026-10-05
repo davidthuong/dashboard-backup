@@ -27,3 +27,10 @@ data/
 Thumbs.db
 .vscode/
 .idea/
+
+# Generated on the hub by scripts/deploy/init_ssl.sh (contains private key)
+deploy/letsencrypt/
+deploy/nginx/conf.d/backup-dashboard.conf
+
+# Installers / binaries
+*.exe
