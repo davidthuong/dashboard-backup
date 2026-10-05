@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     agent_trigger_enabled: bool = False
     agent_nodes_json: str = ""
     agent_request_ttl_seconds: int = Field(default=120, ge=30, le=900)
+    # Comma-separated HH:MM in TIMEZONE, e.g. "07:00" or "07:00,19:00". Empty = manual trigger only.
+    agent_auto_trigger_times: str = ""
 
     ingest_enabled: bool = True
     ingest_api_token: str = ""

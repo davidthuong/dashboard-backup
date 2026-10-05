@@ -31,6 +31,18 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
+def _extract_exit_code(data: Any) -> int | None:
+    # Receivers answer {"ok": true, "result": ...} even when the push script failed;
+    # the script's exit code is inside result (a dict, or a list with stdout lines + dict on Windows).
+    result = data.get("result") if isinstance(data, dict) else None
+    candidates = result if isinstance(result, list) else [result]
+    for item in candidates:
+        if isinstance(item, dict) and "exit_code" in item:
+            value = item.get("exit_code")
+            return None if value is None else _safe_int(value, 1)
+    return None
+
+
 class AgentTriggerService:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -97,11 +109,14 @@ class AgentTriggerService:
                 data = response.json() if response.text else {}
             except ValueError:
                 data = {"raw": response.text[:500]}
+            exit_code = _extract_exit_code(data)
+            body_ok = not (isinstance(data, dict) and data.get("ok") is False)
             return {
                 "name": node.name,
                 "url": node.url,
-                "ok": response.status_code < 300,
+                "ok": response.status_code < 300 and body_ok and exit_code in (None, 0),
                 "status_code": response.status_code,
+                "exit_code": exit_code,
                 "response": data,
             }
         except Exception as exc:
@@ -110,7 +125,8 @@ class AgentTriggerService:
                 "url": node.url,
                 "ok": False,
                 "status_code": 0,
-                "response": {"error": str(exc)},
+                "exit_code": None,
+                "response": {"error": str(exc) or exc.__class__.__name__},
             }
 
     async def trigger_all(self) -> list[dict[str, Any]]:
