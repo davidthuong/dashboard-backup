@@ -9,7 +9,8 @@ param(
   [string]$AllowedActions = "health,rclone_log_push,icewarp_backup_push,backup_script_push",
   [string]$AllowedScriptRoots = "D:\scripts",
   [string]$AllowedLogRoots = "D:\scripts,C:\Logs",
-  [bool]$AllowInsecureHubUrl = $false,
+  [ValidateSet(0, 1)]
+  [int]$AllowInsecureHubUrl = 0,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
   [string]$DefaultHubUrl = "https://103.238.213.14",
