@@ -3,7 +3,7 @@
 Luồng hoạt động:
 
 ```
-Hub (103.238.213.14)  --POST ký HMAC-->  node:9189/collect   (receiver chạy bằng Scheduled Task)
+Hub (103.238.214.35)  --POST ký HMAC-->  node:9189/collect   (receiver chạy bằng Scheduled Task)
                                               |
                                               v  đọc D:\scripts\backup-icewarp.log
 Hub /api/ingest/status  <--POST https + X-Ingest-Token--  node
@@ -21,7 +21,7 @@ Các node hiện tại là Windows Server 2012 R2 / **PowerShell 4.0** → scrip
 ## A. Chuẩn bị trên hub
 
 ```bash
-ssh root@103.238.213.14
+ssh root@103.238.214.35
 cd /opt/backup-dashboard
 ```
 
@@ -35,8 +35,10 @@ cd /opt/backup-dashboard
    ```
 3. Lấy chứng chỉ của hub (self-signed theo IP, node phải tin chứng chỉ này):
    ```bash
-   cat deploy/letsencrypt/live/103.238.213.14/fullchain.pem
+   openssl x509 -noout -subject -enddate -in deploy/letsencrypt/live/*/fullchain.pem
+   cat deploy/letsencrypt/live/*/fullchain.pem
    ```
+   `subject` phải là `CN = 103.238.214.35` (đúng địa chỉ node dùng trong `-HubUrl`), `notAfter` chưa qua.
    Copy toàn bộ nội dung (gồm dòng `BEGIN/END CERTIFICATE`) sang node, lưu thành `D:\scripts\hub.cer`.
 
 ---
@@ -70,7 +72,7 @@ Bước này kiểm tra chứng chỉ, TLS 1.2 và ingest token trước khi đ�
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\scripts\windows_push_from_log.ps1 `
-  -HubUrl "https://103.238.213.14" `
+  -HubUrl "https://103.238.214.35" `
   -IngestToken "<INGEST_API_TOKEN>" `
   -NodeName "hub4" `
   -JobName "icewarp-nightly" `
@@ -84,14 +86,14 @@ powershell -ExecutionPolicy Bypass -File D:\scripts\windows_push_from_log.ps1 `
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\scripts\windows_install_secure_receiver_task.ps1 `
   -SharedSecret "<SECRET_O_BUOC_A1>" `
-  -AllowedHubIPs "103.238.213.14" `
-  -DefaultHubUrl "https://103.238.213.14" `
+  -AllowedHubIPs "103.238.214.35" `
+  -DefaultHubUrl "https://103.238.214.35" `
   -DefaultIngestToken "<INGEST_API_TOKEN>" `
   -DefaultNodeName "hub4"
 ```
 
 Script tự tạo URLACL + Windows Firewall rule cho cổng 9189 (chỉ cho IP hub).
-Nếu nhà cung cấp VPS/cloud có firewall riêng → mở thêm TCP **9189** từ `103.238.213.14`.
+Nếu nhà cung cấp VPS/cloud có firewall riêng → mở thêm TCP **9189** từ `103.238.214.35`.
 
 ### 5. Kiểm tra trên node
 
@@ -159,8 +161,8 @@ Phía hub làm giống mục **C** (url `http://<IP>:9189/collect`, `log_path` d
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| `health` → `HTTP 0` + `ConnectError` / timeout | Receiver chưa chạy, sai IP/cổng, firewall (Windows hoặc nhà cung cấp) chặn | Mục B5; mở TCP 9189 cho `103.238.213.14` |
-| `HTTP 403 Remote IP not allowed` | IP hub không nằm trong `-AllowedHubIPs` | Cài lại task (B4) với IP đúng |
+| `health` → `HTTP 0` + `ConnectError` / timeout | Receiver chưa chạy, sai IP/cổng, firewall (Windows hoặc nhà cung cấp) chặn | Mục B5; mở TCP 9189 cho `103.238.214.35` |
+| `HTTP 403 Remote IP not allowed` | IP hub không nằm trong `-AllowedHubIPs` | Phản hồi có `remote_ip` = IP hub mà node thấy → cài lại task (B4) với đúng IP đó |
 | `HTTP 401 Invalid signature` | Secret trên hub ≠ trên node | Copy lại đúng secret 2 bên, cài lại task |
 | `HTTP 401 Request expired` | Đồng hồ hub/node lệch > 120s | `w32tm /resync`, bật NTP |
 | `trigger` → `exit_code=1` | Node không gửi được về hub | Chạy lệnh B3 trên node để xem lỗi thật |
@@ -177,7 +179,7 @@ Phía hub làm giống mục **C** (url `http://<IP>:9189/collect`, `log_path` d
 `init_ssl.sh` tạo chứng chỉ **hạn 365 ngày**. Xem ngày hết hạn:
 
 ```bash
-openssl x509 -enddate -noout -in /opt/backup-dashboard/deploy/letsencrypt/live/103.238.213.14/fullchain.pem
+openssl x509 -enddate -noout -in /opt/backup-dashboard/deploy/letsencrypt/live/103.238.214.35/fullchain.pem
 ```
 
 Khi tạo lại chứng chỉ → phải làm lại bước **B2 trên tất cả node**, nếu không mọi node sẽ không gửi được kết quả về hub.

@@ -13,7 +13,7 @@ param(
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
   [string]$BackupScriptWrapper = "D:\scripts\windows_run_backup_script_and_push.ps1",
-  [string]$DefaultHubUrl = "https://103.238.213.14",
+  [string]$DefaultHubUrl = "https://103.238.214.35",
   [string]$DefaultIngestToken = "change_me_ingest",
   [string]$DefaultNodeName = "win-bk01",
   [string]$DefaultRcloneJobName = "nightly-share",

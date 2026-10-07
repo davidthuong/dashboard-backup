@@ -195,16 +195,16 @@ Files added:
 Full step-by-step:
 - [DEPLOY_PROD.md](c:/Users/Admin/Documents/tool-work/dashboard backup/DEPLOY_PROD.md)
 
-Quick start for your server `103.238.213.14`:
+Quick start for your server `103.238.214.35`:
 
 ```bash
-ssh root@103.238.213.14
+ssh root@103.238.214.35
 cd /opt/backup-dashboard
 bash scripts/deploy/bootstrap_ubuntu.sh
 cp .env.prod.example .env
 nano .env
 chmod +x scripts/deploy/*.sh
-bash scripts/deploy/init_ssl.sh 103.238.213.14
+bash scripts/deploy/init_ssl.sh 103.238.214.35
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 

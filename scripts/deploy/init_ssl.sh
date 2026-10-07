@@ -5,7 +5,7 @@ if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <server_name> [email]"
   echo "Examples:"
   echo "  $0 backup.example.com admin@example.com"
-  echo "  $0 103.238.213.14"
+  echo "  $0 103.238.214.35"
   exit 1
 fi
 

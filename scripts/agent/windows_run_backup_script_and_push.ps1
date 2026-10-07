@@ -1,5 +1,5 @@
 param(
-  [string]$HubUrl = "https://103.238.213.14",
+  [string]$HubUrl = "https://103.238.214.35",
   [string]$IngestToken = "change_me",
   [string]$NodeName = "win-icewarp-01",
   [string]$JobName = "icewarp-nightly-backup",

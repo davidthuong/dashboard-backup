@@ -6,7 +6,7 @@ param(
   [string]$RoutePath = "/collect",
   [Parameter(Mandatory = $true)]
   [string]$SharedSecret,
-  [string]$AllowedHubIPs = "103.238.213.14,127.0.0.1",
+  [string]$AllowedHubIPs = "103.238.214.35,127.0.0.1",
   [int]$RequestTtlSeconds = 120,
   [int]$MaxBodyBytes = 1048576,
   [string]$AllowedActions = "health,rclone_log_push,icewarp_backup_push,backup_script_push",
@@ -15,7 +15,7 @@ param(
   [bool]$AllowInsecureHubUrl = $false,
   [string]$RclonePushScript = "D:\scripts\windows_push_from_log.ps1",
   [string]$IcewarpScript = "D:\scripts\windows_icewarp_backup_and_push.ps1",
-  [string]$DefaultHubUrl = "https://103.238.213.14",
+  [string]$DefaultHubUrl = "https://103.238.214.35",
   [string]$DefaultIngestToken = "change_me_ingest",
   [string]$DefaultNodeName = "$env:COMPUTERNAME",
   [string]$DefaultRcloneJobName = "nightly-share",

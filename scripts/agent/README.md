@@ -173,8 +173,8 @@ powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windo
   -ListenPrefix "http://+:9189/" `
   -RoutePath "/collect" `
   -SharedSecret "<shared-secret>" `
-  -AllowedHubIPs "103.238.213.14" `
-  -DefaultHubUrl "https://103.238.213.14" `
+  -AllowedHubIPs "103.238.214.35" `
+  -DefaultHubUrl "https://103.238.214.35" `
   -DefaultIngestToken "<INGEST_API_TOKEN>"
 ```
 
@@ -185,7 +185,7 @@ powershell -ExecutionPolicy Bypass -File C:\backup-dashboard\scripts\agent\windo
   -ListenPrefix "http://+:9189/" `
   -RoutePath "/collect" `
   -SharedSecret "<shared-secret>" `
-  -AllowedHubIPs "103.238.213.14"
+  -AllowedHubIPs "103.238.214.35"
 ```
 
 3. Configure hub `.env`:

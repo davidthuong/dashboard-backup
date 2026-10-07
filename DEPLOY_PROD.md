@@ -1,19 +1,19 @@
 # Deploy Production (Nginx + SSL)
 
-Target server example: `103.238.213.14`
+Target server example: `103.238.214.35`
 
 ## 1) Copy project to server
 
 From local machine:
 
 ```bash
-scp -r "dashboard backup" root@103.238.213.14:/opt/backup-dashboard
+scp -r "dashboard backup" root@103.238.214.35:/opt/backup-dashboard
 ```
 
 On server:
 
 ```bash
-ssh root@103.238.213.14
+ssh root@103.238.214.35
 cd /opt/backup-dashboard
 ```
 
@@ -38,21 +38,21 @@ Must change:
 
 ## 4) Create SSL + nginx config
 
-Case A: You only have IP (`103.238.213.14`)
+Case A: You only have IP (`103.238.214.35`)
 - Lets Encrypt cannot issue cert for IP.
 - Use self-signed cert:
 
 ```bash
 chmod +x scripts/deploy/*.sh
-bash scripts/deploy/init_ssl.sh 103.238.213.14
+bash scripts/deploy/init_ssl.sh 103.238.214.35
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 Open dashboard:
-- `https://103.238.213.14` (browser will show cert warning, accept once)
+- `https://103.238.214.35` (browser will show cert warning, accept once)
 
 Case B: You have domain (recommended)
-- Point DNS A record to `103.238.213.14`, ex: `backup.example.com`.
+- Point DNS A record to `103.238.214.35`, ex: `backup.example.com`.
 - Then run:
 
 ```bash
