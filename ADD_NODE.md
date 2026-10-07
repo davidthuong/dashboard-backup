@@ -35,8 +35,10 @@ cd /opt/backup-dashboard
    ```
 3. Lấy chứng chỉ của hub (self-signed theo IP, node phải tin chứng chỉ này):
    ```bash
-   cat deploy/letsencrypt/live/203.0.113.10/fullchain.pem
+   openssl x509 -noout -subject -enddate -in deploy/letsencrypt/live/*/fullchain.pem
+   cat deploy/letsencrypt/live/*/fullchain.pem
    ```
+   `subject` phải là `CN = 203.0.113.10` (đúng địa chỉ node dùng trong `-HubUrl`), `notAfter` chưa qua.
    Copy toàn bộ nội dung (gồm dòng `BEGIN/END CERTIFICATE`) sang node, lưu thành `D:\scripts\hub.cer`.
 
 ---
@@ -160,7 +162,7 @@ Phía hub làm giống mục **C** (url `http://<IP>:9189/collect`, `log_path` d
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | `health` → `HTTP 0` + `ConnectError` / timeout | Receiver chưa chạy, sai IP/cổng, firewall (Windows hoặc nhà cung cấp) chặn | Mục B5; mở TCP 9189 cho `203.0.113.10` |
-| `HTTP 403 Remote IP not allowed` | IP hub không nằm trong `-AllowedHubIPs` | Cài lại task (B4) với IP đúng |
+| `HTTP 403 Remote IP not allowed` | IP hub không nằm trong `-AllowedHubIPs` | Phản hồi có `remote_ip` = IP hub mà node thấy → cài lại task (B4) với đúng IP đó |
 | `HTTP 401 Invalid signature` | Secret trên hub ≠ trên node | Copy lại đúng secret 2 bên, cài lại task |
 | `HTTP 401 Request expired` | Đồng hồ hub/node lệch > 120s | `w32tm /resync`, bật NTP |
 | `trigger` → `exit_code=1` | Node không gửi được về hub | Chạy lệnh B3 trên node để xem lỗi thật |
