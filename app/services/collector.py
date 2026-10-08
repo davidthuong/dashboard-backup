@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import JobStatusHistory
 from app.services.directadmin_parser import DirectAdminParser
 from app.services.rclone_parser import RcloneParser
@@ -74,6 +76,21 @@ class BackupCollector:
         return normalized, details
 
 
+def to_utc(value: datetime | None) -> datetime | None:
+    """SQLite keeps only the wall-clock part, so every stored time is UTC.
+
+    A naive time (parsed from a log line) is taken as TIMEZONE local time.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        try:
+            value = value.replace(tzinfo=ZoneInfo(get_settings().timezone))
+        except (ZoneInfoNotFoundError, ValueError):
+            value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def persist_records(db: Session, items: list[NormalizedJobStatus]) -> int:
     now = datetime.now(timezone.utc)
     created = 0
@@ -83,8 +100,8 @@ def persist_records(db: Session, items: list[NormalizedJobStatus]) -> int:
             job_name=item.job_name,
             status=item.status,
             message=item.message or "",
-            started_at=item.started_at,
-            ended_at=item.ended_at,
+            started_at=to_utc(item.started_at),
+            ended_at=to_utc(item.ended_at),
             collected_at=now,
             raw_payload=json.dumps(item.raw_payload, ensure_ascii=False, default=str)
             if item.raw_payload is not None

@@ -11,6 +11,7 @@ os.environ.update(
     {
         "DATABASE_URL": f"sqlite:///{(_TMP / 'test.db').as_posix()}",
         "ALLOW_INSECURE_DEFAULTS": "true",
+        "TIMEZONE": "Asia/Bangkok",
         "ADMIN_USERNAME": "admin",
         "ADMIN_PASSWORD": "test-password-123",
         "SESSION_SECRET": "test-session-secret-test-session-secret",
