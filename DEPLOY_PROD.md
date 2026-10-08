@@ -30,6 +30,9 @@ cp .env.prod.example .env
 nano .env
 ```
 
+`DATABASE_URL` is ignored here: `docker-compose.prod.yml` keeps SQLite at `./data/backup_dashboard.db`
+(host `/opt/backup-dashboard/data`), the only place that survives `up -d --build`. Back up that folder.
+
 Must change:
 - `ADMIN_PASSWORD`
 - `SESSION_SECRET`

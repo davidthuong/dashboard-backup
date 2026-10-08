@@ -5,6 +5,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Overrides .env: the SQLite file must live on the ./data volume, anywhere else in the
+      # container it is wiped by every rebuild/recreate (job history, enrolled agents).
+      DATABASE_URL: sqlite:////app/data/backup_dashboard.db
     volumes:
       - ./data:/app/data
     expose:
