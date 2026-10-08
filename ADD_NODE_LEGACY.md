@@ -2,6 +2,10 @@
 
 > Node mới dùng **pull agent**: xem [ADD_NODE.md](ADD_NODE.md). Tài liệu này giữ lại cho các node đang chạy
 > receiver (node1/node2/node3) cho tới khi chuyển hết sang agent mới (ADD_NODE.md, mục "Chuyển node cũ").
+>
+> **Đã cũ về chứng chỉ:** hub giờ dùng Let's Encrypt cho `https://hub.example.com`, không còn chứng chỉ
+> self-signed theo IP. Bỏ qua bước A3 và B2 (`hub.cer`, `certutil`), và dùng `https://hub.example.com` cho
+> `-HubUrl` / `-DefaultHubUrl`. IP `203.0.113.10` vẫn đúng cho `-AllowedHubIPs` và firewall cổng 9189.
 
 Luồng hoạt động:
 
