@@ -18,6 +18,7 @@
         </div>
         <nav class="menu">
           <a class="menu-item active" href="#">Overview</a>
+          <a class="menu-item" href="#agentsCard">Agents</a>
           <a class="menu-item" href="#serverCard">Server Overview</a>
           <a class="menu-item" href="#rcloneCard">Rclone Overview</a>
           <a class="menu-item" href="#latestCard">Latest Status</a>
@@ -107,6 +108,53 @@
               <input id="pollingSeconds" type="number" min="15" max="3600" />
             </label>
             <button id="savePollingBtn" class="secondary">Save Polling</button>
+          </div>
+        </section>
+
+        <section id="agentsCard" class="venix-card">
+          <div class="card-head card-head-row">
+            <div>
+              <h3>Agents</h3>
+              <p id="agentsMeta" class="muted">Backup servers that report to this hub</p>
+            </div>
+            <button id="addNodeBtn" class="primary">Add node</button>
+          </div>
+          <div id="enrollPanel" class="enroll-panel" hidden>
+            <div class="enroll-form">
+              <label>
+                Node name (optional)
+                <input id="enrollName" maxlength="64" placeholder="default: server hostname, e.g. promain-mail" />
+              </label>
+              <button id="createEnrollBtn" class="secondary">Create install command</button>
+            </div>
+            <div id="enrollResult" hidden>
+              <p class="muted">
+                Paste into <strong>PowerShell (Run as Administrator)</strong> on the server. One-time use, expires
+                <span id="enrollExpires"></span>. Only outbound HTTPS to the hub is needed.
+              </p>
+              <textarea id="enrollCommand" rows="5" readonly></textarea>
+              <div class="enroll-actions">
+                <button id="copyEnrollBtn" class="secondary">Copy</button>
+                <span id="enrollCert" class="muted"></span>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="agentsTable">
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>Status</th>
+                  <th>Last seen</th>
+                  <th>Host / IP</th>
+                  <th>Jobs</th>
+                  <th>Last run</th>
+                  <th>Agent</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </section>
 

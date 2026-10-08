@@ -15,6 +15,8 @@ Webapp de quan ly tap trung trang thai backup tu:
 2. Nodes (backup servers):
 - Cach A (pull): Hub doc truc tiep log qua share/mount path.
 - Cach B (push): Node gui status ve Hub qua `POST /api/ingest/status`.
+- Cach C (pull agent, khuyen dung cho node Windows): cai 1 lenh tu dashboard (Agents > Add node),
+  node tu dang ky va poll hub qua HTTPS moi phut. Xem [ADD_NODE.md](ADD_NODE.md).
 
 Khuyen nghi:
 - Veeam: de Hub pull truc tiep tu tung VBR server.
@@ -29,6 +31,13 @@ Khuyen nghi:
 - Manual collect
 - 1 admin account login
 - Alert fail/warning qua Telegram/Email
+
+## Test
+
+```bash
+pip install pytest
+python -m pytest tests
+```
 
 ## Chay local
 
@@ -125,19 +134,27 @@ Body:
 }
 ```
 
-## API trigger agent (hub -> node)
+## API agents
 
-- `GET /api/agents` (list configured nodes)
-- `POST /api/agents/trigger-all`
-- `POST /api/agents/trigger/{name}`
+Admin (dashboard session):
+- `GET /api/agents` (pull agents + legacy nodes from `AGENT_NODES_JSON`)
+- `POST /api/agents/enrollments` (one-time install command for a new pull agent)
+- `POST /api/agents/trigger-all`, `POST /api/agents/trigger/{name}`
+- `PATCH /api/agents/nodes/{id}` (`{"enabled": false}`), `DELETE /api/agents/nodes/{id}`
 
-This mode uses HMAC signature + timestamp + nonce (anti-replay) on node receiver.
+Pull agent (node -> hub, `Authorization: Bearer <agent token>`):
+- `GET /agent/install.ps1`, `GET /agent/agent.ps1`, `GET /api/agent/v1/ping`
+- `POST /api/agent/v1/enroll` (one-time enroll token -> agent token)
+- `POST /api/agent/v1/poll` (heartbeat, returns a pending run)
+- `POST /api/agent/v1/report`
+
+Legacy nodes (hub -> node receiver) use HMAC signature + timestamp + nonce (anti-replay).
 
 ## Remote agent scripts
 
 Thu muc: [scripts/agent/README.md](c:/Users/Admin/Documents/tool-work/dashboard backup/scripts/agent/README.md)
 
-Them server (node) moi vao hub: [ADD_NODE.md](ADD_NODE.md)
+Them server (node) moi vao hub: [ADD_NODE.md](ADD_NODE.md) (pull agent). Node kieu cu (receiver): [ADD_NODE_LEGACY.md](ADD_NODE_LEGACY.md)
 
 Tu dong trigger agent hang ngay: `AGENT_AUTO_TRIGGER_TIMES=07:00` (gio theo `TIMEZONE`, nhieu gio cach nhau dau phay).
 
@@ -145,11 +162,13 @@ Kiem tra node tu hub:
 
 ```bash
 docker exec backup-dashboard-app python -m app.agent_cli list
+docker exec backup-dashboard-app python -m app.agent_cli enroll --name <name>
 docker exec backup-dashboard-app python -m app.agent_cli health
 docker exec backup-dashboard-app python -m app.agent_cli trigger <name>|--all
 ```
 
 Co san:
+- `scripts/agent/windows_pull_agent_install.ps1` + `windows_pull_agent.ps1` (pull agent, hub phat qua `/agent/*.ps1`)
 - `scripts/agent/push_by_exit_code.py`
 - `scripts/agent/report_rclone_log.py`
 - `scripts/agent/report_directadmin_log.py`

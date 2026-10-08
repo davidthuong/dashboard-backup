@@ -9,6 +9,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+# Served to nodes by the hub (/agent/install.ps1, /agent/agent.ps1).
+COPY scripts/agent ./scripts/agent
 COPY .env.example ./.env.example
 
 EXPOSE 8000

@@ -1,5 +1,8 @@
 # Remote Agent Scripts (Linux + Windows)
 
+> Windows node moi: dung **pull agent** (`windows_pull_agent_install.ps1` + `windows_pull_agent.ps1`), cai bang
+> 1 lenh tu dashboard (Agents > Add node). Xem [ADD_NODE.md](../../ADD_NODE.md). Cac muc duoi day la cach cu.
+
 These scripts help remote backup servers push status to the central dashboard (`/api/ingest/status`).
 
 Step-by-step checklist for adding a new node: [ADD_NODE.md](../../ADD_NODE.md)

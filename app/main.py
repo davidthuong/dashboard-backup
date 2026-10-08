@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings, validate_runtime_security
 from app.db import SessionLocal, init_db
-from app.routers import agents, auth, dashboard, ingest
+from app.routers import agent_api, agents, auth, dashboard, ingest
 from app.services.agent_schedule import AgentAutoTrigger
 from app.services.agent_trigger import AgentTriggerService
 from app.services.alerts import AlertManager
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         trigger_service=agent_trigger_service,
         alert_manager=alert_manager,
         settings=settings,
+        db_factory=SessionLocal,
     )
     polling_manager = PollingManager(
         collector=collector,
@@ -76,7 +77,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Pull collection is disabled (ingest-only mode). Scheduler is not started.")
 
-    # Independent of pull collection: ingest-only hubs still need agents triggered.
+    # Independent of pull collection: ingest-only hubs still need agents triggered and watched.
     agent_auto_trigger.start()
 
     yield
@@ -92,3 +93,4 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(ingest.router)
 app.include_router(agents.router)
+app.include_router(agent_api.router)
