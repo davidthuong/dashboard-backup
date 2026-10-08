@@ -422,44 +422,177 @@ async function collectNow() {
 
 async function triggerAgents() {
   if (!state.agentsEnabled) {
-    setStatus("Agent trigger is disabled on hub (.env: AGENT_TRIGGER_ENABLED=true).", "error");
+    setStatus("No agents yet: use Add node (or AGENT_TRIGGER_ENABLED=true for legacy nodes).", "error");
     return;
   }
-  setStatus("Triggering remote agents...", "ok");
+  setStatus("Triggering agents...", "ok");
   try {
     const data = await api("/api/agents/trigger-all", { method: "POST" });
     if (!data) return;
-    const okCount = Number(data.ok_count || 0);
+    const results = data.results || [];
+    const queued = results.filter((r) => r?.response?.queued).length;
     const failedCount = Number(data.failed_count || 0);
-    if (failedCount > 0) {
-      setStatus(`Agents triggered: ${okCount} ok, ${failedCount} failed`, "error");
-    } else {
-      setStatus(`Agents triggered successfully: ${okCount}`, "ok");
-    }
-    await loadData();
+    const direct = results.length - queued - failedCount;
+    const parts = [];
+    if (direct) parts.push(`${direct} ran`);
+    if (queued) parts.push(`${queued} queued (agents pick it up within ~1 min)`);
+    if (failedCount) parts.push(`${failedCount} failed`);
+    setStatus(`Agents: ${parts.join(", ") || "nothing to do"}`, failedCount > 0 ? "error" : "ok");
+    await Promise.all([loadData(), loadAgents()]);
   } catch (err) {
     setStatus(`Trigger failed: ${err.message}`, "error");
   }
 }
 
-async function loadAgentConfig() {
+function agentStatusChip(node) {
+  if (!node.enabled) return '<span class="chip unknown">disabled</span>';
+  if (node.online) return '<span class="chip success">online</span>';
+  return '<span class="chip failed">offline</span>';
+}
+
+function renderAgents(data) {
+  const tbody = qs("agentsTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  const nodes = data.nodes || [];
+  const legacy = data.legacy || [];
+
+  const schedule = data.auto_trigger_times ? `auto run at ${data.auto_trigger_times}` : "manual run only";
+  const latest = data.latest_agent_version ? `latest agent v${data.latest_agent_version}` : "";
+  qs("agentsMeta").textContent = [`${nodes.length} agent(s)`, legacy.length ? `${legacy.length} legacy` : "", schedule, latest]
+    .filter(Boolean)
+    .join(" | ");
+
+  if (!nodes.length && !legacy.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="8">No agents yet. Click "Add node" to install one.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for (const node of nodes) {
+    const jobs = node.jobs || [];
+    const pendingSince = node.run_claimed_at || node.run_requested_at;
+    const pending = node.run_pending
+      ? `<div class="muted small">${node.run_claimed_at ? "running since" : "run queued"} ${esc(fmtDate(pendingSince))}</div>`
+      : "";
+    const outdated = node.outdated ? ' <span class="chip warning">update</span>' : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(node.name)}</strong></td>
+      <td>${agentStatusChip(node)}${pending}</td>
+      <td>${esc(fmtDate(node.last_seen_at))}</td>
+      <td>${esc(node.hostname || "-")}<div class="muted small">${esc(node.remote_ip || "")}</div></td>
+      <td title="${esc(jobs.map((job) => `${job.job_name}: ${job.log_path}`).join("\n"))}">${esc(jobs.map((job) => job.job_name).join(", ") || "-")}</td>
+      <td>${esc(node.last_run_summary || "-")}<div class="muted small">${esc(node.last_run_at ? fmtDate(node.last_run_at) : "")}</div></td>
+      <td title="${esc(node.os_info || "")}">v${esc(node.agent_version || "?")}${outdated}</td>
+      <td class="row-actions">
+        <button class="secondary small" data-action="run" data-name="${esc(node.name)}" ${node.enabled ? "" : "disabled"}>Run</button>
+        <button class="secondary small" data-action="toggle" data-id="${node.id}" data-enabled="${node.enabled ? "1" : "0"}">${node.enabled ? "Disable" : "Enable"}</button>
+        <button class="danger small" data-action="delete" data-id="${node.id}" data-name="${esc(node.name)}">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  for (const node of legacy) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${esc(node.name)}</strong></td>
+      <td><span class="chip unknown">legacy push</span></td>
+      <td>-</td>
+      <td>${esc(node.url)}</td>
+      <td>${esc(node.action)}</td>
+      <td>-</td>
+      <td>receiver</td>
+      <td class="row-actions">
+        <button class="secondary small" data-action="run" data-name="${esc(node.name)}">Run</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function loadAgents() {
   const btn = qs("triggerAgentsBtn");
   try {
     const data = await api("/api/agents");
     if (!data) return;
-    state.agentsEnabled = Boolean(data.enabled);
-    if (state.agentsEnabled) {
-      btn.disabled = false;
-      btn.title = `Configured agent nodes: ${Number(data.count || 0)}`;
-    } else {
-      btn.disabled = true;
-      btn.title = "Enable AGENT_TRIGGER_ENABLED=true in hub .env";
-    }
-  } catch {
+    state.agentsEnabled = Number(data.triggerable || 0) > 0;
+    btn.disabled = !state.agentsEnabled;
+    btn.title = state.agentsEnabled ? `Agents: ${Number(data.triggerable || 0)}` : "No enabled agents: use Add node";
+    renderAgents(data);
+  } catch (err) {
     state.agentsEnabled = false;
     btn.disabled = true;
-    btn.title = "Cannot load agent config";
+    btn.title = "Cannot load agents";
+    setStatus(`Cannot load agents: ${err.message}`, "error");
   }
+}
+
+async function onAgentAction(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const { action, name, id } = button.dataset;
+  try {
+    if (action === "run") {
+      const data = await api(`/api/agents/trigger/${encodeURIComponent(name)}`, { method: "POST" });
+      if (!data) return;
+      const response = data.result?.response || {};
+      if (response.queued) {
+        const note = response.online ? "picked up within ~1 min" : "agent is offline, runs when it is back";
+        setStatus(`Run queued for ${name} - ${note}`, response.online ? "ok" : "error");
+      } else {
+        const detail = `HTTP ${data.result?.status_code}, exit ${data.result?.exit_code}`;
+        setStatus(`${name}: ${data.ok ? "ran" : "failed"} (${detail})`, data.ok ? "ok" : "error");
+      }
+    } else if (action === "toggle") {
+      const enable = button.dataset.enabled !== "1";
+      await api(`/api/agents/nodes/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: enable }) });
+      setStatus(`Agent ${enable ? "enabled" : "disabled"}`, "ok");
+    } else if (action === "delete") {
+      const question = `Delete agent "${name}"? Its job history stays. Uninstall the agent on the server too, or it keeps failing to poll.`;
+      if (!window.confirm(question)) return;
+      await api(`/api/agents/nodes/${id}`, { method: "DELETE" });
+      setStatus(`Agent ${name} deleted`, "ok");
+    }
+    await loadAgents();
+  } catch (err) {
+    setStatus(`Agent action failed: ${err.message}`, "error");
+  }
+}
+
+function toggleEnrollPanel() {
+  const panel = qs("enrollPanel");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) qs("enrollName").focus();
+}
+
+async function createEnrollment() {
+  try {
+    const data = await api("/api/agents/enrollments", {
+      method: "POST",
+      body: JSON.stringify({ name: qs("enrollName").value.trim() }),
+    });
+    if (!data) return;
+    qs("enrollCommand").value = data.command;
+    qs("enrollExpires").textContent = fmtDate(data.expires_at);
+    qs("enrollCert").textContent = data.cert_sha1 ? `Hub certificate SHA1 ${data.cert_sha1}` : "";
+    qs("enrollResult").hidden = false;
+    setStatus(`Install command created${data.node_name ? ` for ${data.node_name}` : ""}`, "ok");
+  } catch (err) {
+    setStatus(`Cannot create install command: ${err.message}`, "error");
+  }
+}
+
+async function copyEnrollCommand() {
+  const box = qs("enrollCommand");
+  try {
+    await navigator.clipboard.writeText(box.value);
+  } catch {
+    box.select();
+    document.execCommand("copy");
+  }
+  setStatus("Install command copied", "ok");
 }
 
 async function loadSystemCapabilities() {
@@ -522,15 +655,22 @@ function bindFilters() {
   qs("savePollingBtn").addEventListener("click", savePolling);
   qs("refreshBtn").addEventListener("click", collectNow);
   qs("triggerAgentsBtn").addEventListener("click", triggerAgents);
+  qs("addNodeBtn").addEventListener("click", toggleEnrollPanel);
+  qs("createEnrollBtn").addEventListener("click", createEnrollment);
+  qs("copyEnrollBtn").addEventListener("click", copyEnrollCommand);
+  qs("agentsTable").addEventListener("click", onAgentAction);
 }
 
 async function bootstrap() {
   bindFilters();
-  await loadAgentConfig();
+  await loadAgents();
   await loadSystemCapabilities();
   await loadPolling();
   await loadData();
-  setInterval(loadData, 30000);
+  setInterval(() => {
+    loadData().catch((err) => setStatus(`Error: ${err.message}`, "error"));
+    loadAgents();
+  }, 30000);
 }
 
 bootstrap().catch((err) => {

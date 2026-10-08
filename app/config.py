@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     # Comma-separated HH:MM in TIMEZONE, e.g. "07:00" or "07:00,19:00". Empty = manual trigger only.
     agent_auto_trigger_times: str = ""
 
+    # Pull agents (scripts/agent/windows_pull_agent*.ps1): nodes enroll themselves and poll the hub.
+    # Public URL nodes use to reach the hub; empty = taken from the browser address when creating an install command.
+    agent_hub_url: str = ""
+    # SHA1 of the hub TLS certificate pinned by the install command; empty = read it from AGENT_TLS_PROBE_ADDR.
+    agent_hub_cert_sha1: str = ""
+    agent_tls_probe_addr: str = "nginx:443"
+    agent_enroll_ttl_minutes: int = Field(default=1440, ge=10, le=10080)
+    agent_offline_after_minutes: int = Field(default=10, ge=3, le=1440)
+
     ingest_enabled: bool = True
     ingest_api_token: str = ""
 

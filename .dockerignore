@@ -5,3 +5,8 @@ __pycache__
 .git
 .env
 backup_dashboard.db
+.venv
+data
+tests
+*.exe
+*.db
