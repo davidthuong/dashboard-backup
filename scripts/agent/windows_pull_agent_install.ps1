@@ -167,13 +167,20 @@ function Install-Agent {
       throw "Hub certificate does not match the install command (got $thumbprint, expected $CertSha1). Aborting."
     }
     $selfSigned = $seen.cert.Subject -eq $seen.cert.Issuer
-    if ($seen.errors -ne [Net.Security.SslPolicyErrors]::None -or $selfSigned) {
+    if ($selfSigned) {
       if (!$CertSha1) {
-        throw "Hub certificate is not publicly trusted ($($seen.errors)) and no -CertSha1 was given to pin it."
+        throw "Hub certificate is self-signed and no -CertSha1 was given to pin it."
       }
       # Self-signed: trust exactly this certificate, for the agent only.
       $pin = $thumbprint
       Write-Step "Pinned hub certificate $thumbprint (expires $($seen.cert.NotAfter.ToString('yyyy-MM-dd')))"
+    }
+    elseif ($seen.errors -ne [Net.Security.SslPolicyErrors]::None) {
+      # A CA certificate (Let's Encrypt) is renewed every few months: pinning it would break the
+      # agent at the next renewal, so Windows itself has to trust the CA.
+      throw ("Windows does not trust the hub certificate ($($seen.errors), issuer: $($seen.cert.Issuer)). " +
+        "Update the root certificates on this server (Windows Update, or: certutil -generateSSTFromWU roots.sst " +
+        "then import roots.sst into Trusted Root Certification Authorities) and run the install command again.")
     }
     else {
       Write-Step "Hub certificate is trusted by Windows (normal validation, no pin)"

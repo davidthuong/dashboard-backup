@@ -67,6 +67,33 @@ docker compose -f docker-compose.prod.yml up -d --build
 Open dashboard:
 - `https://backup.example.com`
 
+### Hub đang chạy bằng IP → chuyển sang domain
+
+DNS A record của domain phải trỏ về hub, cổng 80 + 443 mở từ Internet. Chạy trên hub (`cd /opt/backup-dashboard`):
+
+```bash
+git pull
+bash scripts/deploy/save_legacy_ip_cert.sh            # giữ https://<IP> + chứng chỉ cũ cho node cũ
+bash scripts/deploy/init_ssl.sh hub.example.com <email-nhan-thong-bao-letsencrypt>
+sed -i 's#^AGENT_HUB_URL=.*#AGENT_HUB_URL=https://hub.example.com#' .env
+docker compose -f docker-compose.prod.yml up -d --force-recreate app
+```
+
+Kiểm tra (domain → Let's Encrypt, IP → chứng chỉ cũ):
+
+```bash
+echo | openssl s_client -connect 127.0.0.1:443 -servername hub.example.com 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+echo | openssl s_client -connect 127.0.0.1:443 2>/dev/null | openssl x509 -noout -subject -issuer -enddate
+```
+
+Khi không còn node nào dùng IP (node1–3 đã sang pull agent với domain):
+
+```bash
+rm -rf deploy/letsencrypt/legacy-ip
+bash scripts/deploy/render_nginx_conf.sh hub.example.com https
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+```
+
 ## 5) Auto renew (domain mode)
 
 Add cron:
