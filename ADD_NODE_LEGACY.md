@@ -2,6 +2,10 @@
 
 > Node mới dùng **pull agent**: xem [ADD_NODE.md](ADD_NODE.md). Tài liệu này giữ lại cho các node đang chạy
 > receiver (hub1/hub2/hub3) cho tới khi chuyển hết sang agent mới (ADD_NODE.md, mục "Chuyển node cũ").
+>
+> **Đã cũ về chứng chỉ:** hub giờ dùng Let's Encrypt cho `https://backup.sys.bizmac.io`, không còn chứng chỉ
+> self-signed theo IP. Bỏ qua bước A3 và B2 (`hub.cer`, `certutil`), và dùng `https://backup.sys.bizmac.io` cho
+> `-HubUrl` / `-DefaultHubUrl`. IP `103.238.214.35` vẫn đúng cho `-AllowedHubIPs` và firewall cổng 9189.
 
 Luồng hoạt động:
 

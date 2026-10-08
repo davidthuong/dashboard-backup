@@ -32,6 +32,15 @@ host_path() {
 CERT="$(host_path ssl_certificate)"
 KEY="$(host_path ssl_certificate_key)"
 
+# Only a self-signed IP certificate needs keeping. A CA certificate (Let's Encrypt) copied here would
+# never be renewed and would expire on the IP address within weeks.
+SUBJECT="$(openssl x509 -noout -subject -in "${CERT}" | sed 's/^subject= *//')"
+ISSUER="$(openssl x509 -noout -issuer -in "${CERT}" | sed 's/^issuer= *//')"
+if [[ "${SUBJECT}" != "${ISSUER}" ]]; then
+  echo "[SKIP] nginx already serves a CA-issued certificate (${SUBJECT}, issuer ${ISSUER}); nothing to keep."
+  exit 0
+fi
+
 mkdir -p "${DEST}"
 cp -L "${CERT}" "${DEST}/fullchain.pem"
 cp -L "${KEY}" "${DEST}/privkey.pem"

@@ -154,9 +154,10 @@ Hết node cũ thì có thể đặt `AGENT_TRIGGER_ENABLED=false`.
 | Kết quả `unknown` | Log không có `START BACKUP` / `BACKUP HOAN TAT ...` | Kiểm tra script backup ghi log đúng mẫu |
 | Kết quả `running` | Backup chưa xong lúc chạy | Bình thường; lùi giờ `AGENT_AUTO_TRIGGER_TIMES` nếu lần nào cũng gặp |
 
-Hub dùng `https://backup.sys.bizmac.io` (Let's Encrypt, tự gia hạn — cần cron ở DEPLOY_PROD.md mục 5).
-`https://103.238.214.35` vẫn chạy bằng chứng chỉ self-signed cũ (`deploy/letsencrypt/legacy-ip/`) cho tới khi
-hub1–3 chuyển xong; sau đó xoá thư mục đó và chạy lại `render_nginx_conf.sh` (DEPLOY_PROD.md, mục "IP sang domain").
+**Chứng chỉ hub**: Let's Encrypt cho `backup.sys.bizmac.io` (gọi bằng IP cũng nhận chứng chỉ này), gia hạn bởi cron
+`renew_ssl.sh` lúc 03:00 hằng ngày (DEPLOY_PROD.md mục 5). Windows Server 2012 R2 và 2022 đều tin chứng chỉ này
+(kiểm tra 2026-10-08), nên agent không ghim gì và gia hạn không ảnh hưởng. Kiểm tra hạn:
+`echo | openssl s_client -connect 127.0.0.1:443 -servername backup.sys.bizmac.io 2>/dev/null | openssl x509 -noout -enddate`.
 
 ---
 
