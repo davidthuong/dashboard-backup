@@ -13,39 +13,21 @@ function qs(id) {
   return document.getElementById(id);
 }
 
-function fmtDate(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
-}
-
-function fmtCollectedDate(value) {
-  if (!value) return "-";
-  const text = String(value).trim();
-  if (!text) return "-";
-
-  const hasTz = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(text);
-  let candidate = text;
-  if (!hasTz) {
-    candidate = text.replace(" ", "T") + "Z";
-  }
-
-  const d = new Date(candidate);
-  if (Number.isNaN(d.getTime())) return fmtDate(value);
-  return d.toLocaleString();
-}
-
-function parseCollectedAtMs(value) {
+// The hub stores every time in UTC; SQLite hands them back without an offset, so a bare
+// "2026-10-08T13:04:06" means UTC, not the browser's local time.
+function parseApiDateMs(value) {
   if (!value) return Number.NaN;
   const text = String(value).trim();
   if (!text) return Number.NaN;
   const hasTz = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(text);
-  let candidate = text;
-  if (!hasTz) {
-    candidate = text.replace(" ", "T") + "Z";
-  }
-  return Date.parse(candidate);
+  return Date.parse(hasTz ? text : text.replace(" ", "T") + "Z");
+}
+
+function fmtDate(value) {
+  if (!value) return "-";
+  const ms = parseApiDateMs(value);
+  if (Number.isNaN(ms)) return String(value);
+  return new Date(ms).toLocaleString();
 }
 
 function statusClass(status) {
@@ -105,7 +87,7 @@ function renderLatest(items) {
       <td>${esc(item.message || "")}</td>
       <td>${esc(fmtDate(nextRunValue))}</td>
       <td>${esc(fmtDate(item.ended_at))}</td>
-      <td>${esc(fmtCollectedDate(item.collected_at))}</td>
+      <td>${esc(fmtDate(item.collected_at))}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -119,7 +101,7 @@ function renderHistory(items) {
     const nextRunValue = hasNextRunField ? item.next_run : item.started_at;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${esc(fmtCollectedDate(item.collected_at))}</td>
+      <td>${esc(fmtDate(item.collected_at))}</td>
       <td>${esc(item.source)}</td>
       <td>${esc(item.job_name)}</td>
       <td><span class="${statusClass(item.status)}">${esc(item.status)}</span></td>
@@ -167,7 +149,7 @@ function summarizeByServer(items) {
   const activeWindowMs = Math.max(5, Number(state.activeServerWindowMinutes || 1440)) * 60 * 1000;
   for (const item of items) {
     const server = inferServerName(item);
-    const collectedAtMs = parseCollectedAtMs(item?.collected_at);
+    const collectedAtMs = parseApiDateMs(item?.collected_at);
     if (!map.has(server)) {
       map.set(server, {
         server,

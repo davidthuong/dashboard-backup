@@ -83,13 +83,6 @@ def as_utc(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def _to_utc(value: datetime | None) -> datetime | None:
-    # SQLite stores the wall-clock time as sent, so normalize offsets before saving.
-    if value is None or value.tzinfo is None:
-        return value
-    return value.astimezone(timezone.utc)
-
-
 def _iso(value: datetime | None) -> str | None:
     value = as_utc(value)
     return value.isoformat() if value else None
@@ -333,8 +326,8 @@ def record_report(
                 job_name=f"[{node.name}] {item.job_name.strip()[:120] or 'unnamed-job'}",
                 status=status if status in ALLOWED_STATUSES else "unknown",
                 message=item.message[:2000],
-                started_at=_to_utc(item.started_at),
-                ended_at=_to_utc(item.ended_at),
+                started_at=item.started_at,
+                ended_at=item.ended_at,
                 raw_payload=item.raw_payload,
             )
         )
