@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import secrets
+import socket
 import ssl
 import time
 import uuid
@@ -113,10 +114,17 @@ def latest_agent_version() -> str:
 # --- hub address / certificate -------------------------------------------------------------
 
 
-def _fetch_cert_sha1(addr: str) -> str:
+def _fetch_cert_sha1(addr: str, server_name: str) -> str:
+    # Connect to addr (e.g. nginx:443 inside docker compose) but ask for the hub's own name via SNI,
+    # so nginx answers with the certificate that nodes get, not its default server's.
     host, _, port = addr.strip().rpartition(":")
-    pem = ssl.get_server_certificate((host.strip("[]"), int(port)), timeout=5)
-    return hashlib.sha1(ssl.PEM_cert_to_DER_cert(pem)).hexdigest().upper()
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host.strip("[]"), int(port)), timeout=5) as sock:
+        with context.wrap_socket(sock, server_hostname=server_name) as tls:
+            der = tls.getpeercert(binary_form=True)
+    return hashlib.sha1(der).hexdigest().upper()
 
 
 def hub_cert_sha1(settings: Settings, hub_url: str) -> str:
@@ -130,14 +138,15 @@ def hub_cert_sha1(settings: Settings, hub_url: str) -> str:
 
     candidates = [settings.agent_tls_probe_addr.strip(), f"{parts.hostname}:{parts.port or 443}"]
     for addr in [item for item in candidates if item]:
-        cached = _cert_cache.get(addr)
+        cache_key = f"{addr}|{parts.hostname}"
+        cached = _cert_cache.get(cache_key)
         if cached and time.monotonic() - cached[0] < 600:
             return cached[1]
         try:
-            sha1 = _fetch_cert_sha1(addr)
+            sha1 = _fetch_cert_sha1(addr, parts.hostname)
         except (OSError, ValueError):
             continue
-        _cert_cache[addr] = (time.monotonic(), sha1)
+        _cert_cache[cache_key] = (time.monotonic(), sha1)
         return sha1
     return ""
 

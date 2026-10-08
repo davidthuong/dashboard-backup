@@ -4,7 +4,7 @@ Cài 1 lệnh trên node, node tự đăng ký với hub. Không mở cổng, kh
 
 ```
 node (Scheduled Task "BackupHub-Agent", SYSTEM, mỗi phút)
-   |  POST https://103.238.214.35/api/agent/v1/poll   (Bearer token riêng của node)
+   |  POST https://backup.sys.bizmac.io/api/agent/v1/poll   (Bearer token riêng của node)
    |  <- "có lệnh chạy không?"  (hub xếp lệnh theo AGENT_AUTO_TRIGGER_TIMES hoặc nút Run / Trigger Agents)
    |
    +-- có lệnh: đọc D:\scripts\backup-icewarp.log --> POST /api/agent/v1/report --> dashboard + cảnh báo
@@ -33,20 +33,21 @@ node (Scheduled Task "BackupHub-Agent", SYSTEM, mỗi phút)
 
    Kết quả đúng (dòng cuối màu xanh):
    ```
-   ==> Checking hub certificate (103.238.214.35:443)
-   ==> Pinned hub certificate <SHA1> (expires ...)
+   ==> Checking hub certificate (backup.sys.bizmac.io:443)
+   ==> Hub certificate is trusted by Windows (normal validation, no pin)
    ==> Job icewarp-nightly: D:\scripts\backup-icewarp.log
    ==> Enrolled as 'promain-mail'
    ==> Registered scheduled task BackupHub-Agent (SYSTEM, every minute)
-   OK: agent 'promain-mail' is polling https://103.238.214.35 (ok ... idle)
+   OK: agent 'promain-mail' is polling https://backup.sys.bizmac.io (ok ... idle)
    ```
 
 3. Dashboard → **Agents**: node `online`. Bấm **Run** → trong ~1 phút cột *Last run* có kết quả và
    *Latest Status* có dòng `[promain-mail] icewarp-nightly`.
 
-Lệnh cài tự làm: kiểm tra chứng chỉ hub đúng SHA1 trong lệnh (sai là dừng), ghim (pin) SHA1 đó vào `config.json`
-của agent (không thêm gì vào certificate store của Windows), tìm log, đăng ký node, cài file, tạo Scheduled Task,
-chờ lần poll đầu tiên.
+Lệnh cài tự làm: kiểm tra chứng chỉ hub đúng SHA1 trong lệnh (sai là dừng), tìm log, đăng ký node, cài file,
+tạo Scheduled Task, chờ lần poll đầu tiên. Hub dùng Let's Encrypt (domain) → agent kiểm tra chứng chỉ như bình thường,
+gia hạn không ảnh hưởng. Hub chỉ có chứng chỉ self-signed (IP) → agent ghim (pin) SHA1 vào `config.json`
+(không thêm gì vào certificate store của Windows).
 
 **Job**: mặc định `icewarp-nightly` đọc `D:\scripts\backup-icewarp.log` nếu file tồn tại. Log khác:
 thêm vào cuối lệnh cài `-LogPath "E:\path\file.log" -JobName "ten-job"`.
@@ -100,7 +101,7 @@ rồi bấm **Delete** ở node đó trên dashboard.
 ssh root@103.238.214.35
 cd /opt/backup-dashboard
 git pull
-grep -q '^AGENT_HUB_URL=' .env || echo 'AGENT_HUB_URL=https://103.238.214.35' >> .env
+grep -q '^AGENT_HUB_URL=' .env || echo 'AGENT_HUB_URL=https://backup.sys.bizmac.io' >> .env
 docker compose -f docker-compose.prod.yml up -d --build app
 docker exec backup-dashboard-app python -m app.agent_cli list
 ```
@@ -142,18 +143,20 @@ Hết node cũ thì có thể đặt `AGENT_TRIGGER_ENABLED=false`.
 | `Could not establish trust relationship` ngay khi dán lệnh | Như trên (SHA1 trong lệnh không khớp) | Như trên |
 | `Enrollment failed: ... invalid, already used or expired` | Lệnh đã dùng rồi hoặc quá 24 giờ | Tạo lệnh cài mới |
 | `Enrollment failed: (409) ... already in use` | Tên (hoặc hostname) đã có node khác, lệnh lại không ghi tên | Tạo lệnh cài có nhập đúng tên đó (cài lại), hoặc chọn tên khác |
-| `Cannot reach .../api/agent/v1/ping` | Node không ra được 443 tới hub (firewall/DNS) | `Test-NetConnection 103.238.214.35 -Port 443` |
+| `Cannot reach .../api/agent/v1/ping` | Node không ra được 443 tới hub (firewall/DNS) | `Test-NetConnection backup.sys.bizmac.io -Port 443` |
+| `Windows does not trust the hub certificate` | Windows trên node thiếu root ISRG Root X1 của Let's Encrypt (2012 R2 tắt cập nhật root) | Chạy Windows Update, hoặc `certutil -generateSSTFromWU roots.sst` rồi import `roots.sst` vào Trusted Root; chạy lại lệnh cài |
 | `Run PowerShell as Administrator` | Chưa mở PowerShell bằng quyền Admin | Mở lại bằng Run as Administrator |
 | `No job log found` | Không có `D:\scripts\backup-icewarp.log` | Chạy lại với `-LogPath` |
 | Dashboard: **offline** | Task không chạy, máy tắt, hoặc mất mạng | Xem `last-poll.txt`, `Get-ScheduledTaskInfo` (mục 2) |
 | `last-poll.txt`: `error ... 401 Unknown agent token` | Node đã bị Delete trên hub, hoặc tên này đã cài lại ở máy khác | Tạo lệnh cài mới, chạy lại |
 | `last-poll.txt`: `error ... 403 Node is disabled` | Node bị Disable trên dashboard | Bấm **Enable** |
-| `last-poll.txt`: `Could not establish trust relationship` | Chứng chỉ hub đã tạo lại (SHA1 đổi) | Tạo lệnh cài mới có tên node, chạy lại trên node (ghim chứng chỉ mới) |
+| `last-poll.txt`: `Could not establish trust relationship` | Agent cài lúc hub còn dùng IP + self-signed, chứng chỉ đó đã đổi | Tạo lệnh cài mới có tên node (hub giờ dùng domain), chạy lại trên node |
 | Kết quả `unknown` | Log không có `START BACKUP` / `BACKUP HOAN TAT ...` | Kiểm tra script backup ghi log đúng mẫu |
 | Kết quả `running` | Backup chưa xong lúc chạy | Bình thường; lùi giờ `AGENT_AUTO_TRIGGER_TIMES` nếu lần nào cũng gặp |
 
-**Chứng chỉ self-signed hết hạn sau 365 ngày** (`init_ssl.sh`). Tạo lại chứng chỉ → mọi node mất kết nối →
-phải chạy lại lệnh cài trên từng node. Dùng domain + Let's Encrypt (DEPLOY_PROD.md, Case B) thì không gặp chuyện này.
+Hub dùng `https://backup.sys.bizmac.io` (Let's Encrypt, tự gia hạn — cần cron ở DEPLOY_PROD.md mục 5).
+`https://103.238.214.35` vẫn chạy bằng chứng chỉ self-signed cũ (`deploy/letsencrypt/legacy-ip/`) cho tới khi
+hub1–3 chuyển xong; sau đó xoá thư mục đó và chạy lại `render_nginx_conf.sh` (DEPLOY_PROD.md, mục "IP sang domain").
 
 ---
 

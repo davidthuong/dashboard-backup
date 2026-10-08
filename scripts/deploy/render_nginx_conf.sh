@@ -25,3 +25,9 @@ TARGET="${CONF_DIR}/backup-dashboard.conf"
 sed "s|__SERVER_NAME__|${SERVER_NAME}|g" "${TEMPLATE}" > "${TARGET}"
 echo "Rendered: ${TARGET} (${MODE})"
 
+# Keep serving the old IP address with its old self-signed cert while nodes still use it.
+if [[ -f "${ROOT_DIR}/deploy/letsencrypt/legacy-ip/fullchain.pem" ]]; then
+  cat "${CONF_DIR}/backup-dashboard.legacy-ip.conf.template" >> "${TARGET}"
+  echo "Added legacy IP block (deploy/letsencrypt/legacy-ip/)"
+fi
+

@@ -1,0 +1,30 @@
+
+# Old address https://<IP> with the old self-signed certificate (deploy/letsencrypt/legacy-ip/).
+# Appended by render_nginx_conf.sh while that folder exists, so nodes still pointing at the IP keep
+# working after the switch to a domain. Delete the folder and re-render once no node uses the IP.
+server {
+    listen 443 ssl http2 default_server;
+    server_name _;
+
+    ssl_certificate /etc/letsencrypt/legacy-ip/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/legacy-ip/privkey.pem;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL_LEGACY:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+    add_header Referrer-Policy same-origin;
+
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://app:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 60s;
+    }
+}

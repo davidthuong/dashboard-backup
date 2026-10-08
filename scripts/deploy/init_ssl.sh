@@ -21,6 +21,11 @@ is_ip() {
   [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
 }
 
+reload_nginx() {
+  docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" exec nginx nginx -t
+  docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" exec nginx nginx -s reload
+}
+
 if is_ip "${SERVER_NAME}"; then
   echo "[INFO] Detected IP address. Let's Encrypt does not issue certs for IP."
   echo "[INFO] Generating self-signed certificate for ${SERVER_NAME}."
@@ -47,12 +52,16 @@ echo "[INFO] Preparing HTTP-only nginx config for ACME challenge."
 
 echo "[INFO] Starting app + nginx (HTTP only)."
 docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" up -d --build app nginx
+# A running nginx does not pick up the re-rendered config by itself.
+reload_nginx
 
 echo "[INFO] Requesting Let's Encrypt certificate for ${SERVER_NAME}."
+# RSA key: Windows Server 2012 R2 nodes validate the RSA chain (ISRG Root X1) reliably.
 docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" run --rm certbot certonly \
   --webroot -w /var/www/certbot \
   --email "${EMAIL}" \
   -d "${SERVER_NAME}" \
+  --key-type rsa \
   --agree-tos \
   --no-eff-email \
   --force-renewal
@@ -60,6 +69,7 @@ docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" run --rm certbot certonl
 echo "[INFO] Switching nginx to HTTPS config."
 "${ROOT_DIR}/scripts/deploy/render_nginx_conf.sh" "${SERVER_NAME}" "https"
 docker compose -f "${ROOT_DIR}/docker-compose.prod.yml" up -d nginx
+reload_nginx
 
 echo "[OK] SSL initialization complete."
 
